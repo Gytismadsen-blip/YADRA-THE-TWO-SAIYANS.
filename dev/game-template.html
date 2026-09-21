@@ -827,6 +827,7 @@ cv.addEventListener('pointerdown', e => {
   initAudio(); cv.focus();
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  if (mode === 'train' && inside({ x: 2, y: 2, w: 60, h: 14 })) { press('back'); return; }
   if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice'); else if (!touchMode && inside(BTN_F)) press('full');
   { const rawX = x + (mode === 'village' ? CW - W : OFFX); if (mode === 'village' && y < 14 && rawX > CW - 70) press('map'); else if (mode === 'village' && y < 14 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) press('log'); }
 });
@@ -2882,9 +2883,9 @@ addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k && held[k] !== u
 addEventListener('blur', () => { for (const k in held) held[k] = false; });
 const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'log', 'bag', 'over'];
 function drawBackBtn() {
-  if (!touchMode || BACK_MODES.indexOf(mode) < 0) return;
-  const label = mode === 'over' ? '< MENU' : '< BACK';
-  ctx.fillStyle = 'rgba(10,10,40,.88)'; ctx.fillRect(2, 2, 44, 14); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(2, 2, 44, 1); ctx.fillRect(2, 15, 44, 1); ctx.fillRect(2, 2, 1, 14); ctx.fillRect(45, 2, 1, 14);
+  if (BACK_MODES.indexOf(mode) < 0 || (!touchMode && mode !== 'train')) return;
+  const label = mode === 'over' ? '< MENU' : touchMode ? '< BACK' : 'X: LEAVE', bw = textW(label) + 10;
+  ctx.fillStyle = 'rgba(10,10,40,.92)'; ctx.fillRect(2, 2, bw, 14); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(2, 2, bw, 1); ctx.fillRect(2, 15, bw, 1); ctx.fillRect(2, 2, 1, 14); ctx.fillRect(bw + 1, 2, 1, 14);
   textS(label, 7, 6, '#ffe060', 1);
 }
 (function setupTouch() {
