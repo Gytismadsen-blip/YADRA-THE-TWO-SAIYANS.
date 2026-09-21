@@ -2105,6 +2105,7 @@ function drawVillage() {
     wrap(vMsg || buffLine(), 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
     textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
   }
+  if (touchMode && !vFish && !vTalk && (vMenu || vChoice || ROOMS[area])) { const lb = (vMenu || vChoice) ? '< BACK' : '< LEAVE', bw = textW(lb) + 10, bx = CW - bw - 3; ctx.fillStyle = 'rgba(10,10,40,.92)'; ctx.fillRect(bx, 16, bw, 15); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(bx, 16, bw, 1); ctx.fillRect(bx, 30, bw, 1); ctx.fillRect(bx, 16, 1, 15); ctx.fillRect(bx + bw - 1, 16, 1, 15); textS(lb, bx + 5, 20, '#ffe060', 1); }
   if (vFish) drawFishUi();
   if (vFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + vFade + ')'; ctx.fillRect(0, 0, CW, 196); }
   if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, CW, 196); }
@@ -3181,6 +3182,7 @@ function drawBackBtn() {
       for (let i = 0; i < MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
     }
     else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
+    else if (mode === 'village' && (vMenu || vChoice) && y >= 15 && y <= 32 && x > CW - 70) { press('back'); }
     else if (mode === 'village' && vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? inR(2, 198 + i * 19, CW - 4, 19) : inR(2, 199 + i * 13, CW - 4, 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
     else if (mode === 'bag' || (mode === 'log' && y < 14 && x > W - 70)) { if (y < 14 && x > W - 70) press(mode === 'log' ? 'bag' : 'log'); }
     else if (mode === 'log') { const rows = logRows(); for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) if (inR(2, 21 + i * 14, W - 4, 14)) { if (logSel === logTop + i) press('ok'); else { logSel = logTop + i; sfx('move'); } return; } }
@@ -3196,6 +3198,7 @@ function drawBackBtn() {
         try { document.body.setPointerCapture(e.pointerId); } catch (_) {} return;
       }
       const c = canvasXY(e);
+      if (c.inside && ROOMS[area] && !vFish && c.y >= 15 && c.y <= 32 && c.x > CW - 70) { exitRoom(); return; }
       if (c.inside && c.y < 14 && c.x > CW - 70) press('map'); else if (c.inside && c.y < 14 && c.x > 40) press('log'); else press('ok');
       return;
     }
