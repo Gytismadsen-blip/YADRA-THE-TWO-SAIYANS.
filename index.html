@@ -47,12 +47,13 @@
   'use strict';
 
   const CFG = {
-    player: { hp: 170, ki: 100, st: 50 },
+    player: { hp: 170, ki: 100, kiMax: 100, st: 50 },
     roku: { hp: 150, rush: 16, blast: 18, weak: 10, counterHit: 12, deflectHit: 14, tracking: 20, phase2At: 75, phase2Mult: 1.3, evadeCounter: 14 },
-    strainDecay: 3,
+    strainDecay: 3, startStrain: 0, noSenseLie: false,
     staminaRegen: 3,
     collapseStrain: 60,
     planReadChance: 0.7, lateReadChance: 0.85, memoryDecay: 0.88, minEvidence: 0.9, chargeReadMult: 0.25,
+    train: { hpPerBody: 4, decayPerBody: 0.12, kiPerKi: 4, lanceStrainPerKi: 1.5, readCutPerFocus: 0.05 },
     strainTier1: 50, strainTier2: 75, kiPenalty: 1.25, dmgPenalty: 0.8, phantomFail: 0.25,
     moves: {
       strike:  { st: 10, dmg: 12 },
@@ -76,6 +77,23 @@
     CFG.player.hp = d.playerHp; CFG.roku.hp = d.rokuHp; CFG.roku.phase2At = Math.floor(d.rokuHp / 2);
     CFG.roku.rush = Math.round(16 * d.dmg); CFG.roku.blast = Math.round(18 * d.dmg);
     CFG.lateReadChance = d.late; CFG.planReadChance = d.plan; CFG.difficulty = DIFFS[name] ? name : 'normal';
+    // reset everything training can change
+    CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
+    CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5;
+  }
+  // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
+  //   body  -> more life, Strain wears off faster
+  //   ki    -> bigger Ki bar, Spirit Lance costs less Strain
+  //   focus -> Roku reads you less, Spirit Sense gets cheaper (and stops being lied to at 5)
+  //   fatigue (0-80) = Body Strain you carry into the fight from over-training
+  function setStats(st) {
+    st = st || {};
+    const n = v => Math.max(0, Math.min(12, v | 0));
+    const b = n(st.body), k = n(st.ki), fo = n(st.focus), fat = Math.max(0, Math.min(80, st.fatigue | 0));
+    CFG.player.hp += CFG.train.hpPerBody * b; CFG.strainDecay += CFG.train.decayPerBody * b;
+    CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
+    const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
+    CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
   }
 
   function mulberry32(a) {
@@ -93,7 +111,7 @@
     const s = {
       rng: mulberry32(seed || 1),
       t: 0,
-      p: { hp: CFG.player.hp, ki: CFG.player.ki, st: CFG.player.st, strain: 0, collapsed: false, last: null },
+      p: { hp: CFG.player.hp, ki: CFG.player.ki, st: CFG.player.st, strain: CFG.startStrain || 0, collapsed: false, last: null },
       r: { hp: CFG.roku.hp, phase: 1, lieOwed: false, queue: [] },
       hist: [],
       known: [],
@@ -213,10 +231,10 @@
       else if (!tracking && incoming > 0) { incoming = 0; toRoku += M.dmg * dm; ev.notes.push('dodged'); }
     } else if (pm === 'charge') {
       const gm = ev.notes.includes('read') ? CFG.chargeReadMult : (interruptCharge && incoming > 0 ? .5 : 1); // Roku breaks a charge he saw coming
-      s.p.ki = Math.min(100, s.p.ki + CFG.moves.charge.gainKi * gm);
+      s.p.ki = Math.min(CFG.player.kiMax, s.p.ki + CFG.moves.charge.gainKi * gm);
     } else if (pm === 'guard') {
       s.p.st = Math.min(CFG.player.st, s.p.st + 15);
-      s.p.ki = Math.min(100, s.p.ki + 10);
+      s.p.ki = Math.min(CFG.player.kiMax, s.p.ki + 10);
       s.p.strain = Math.max(0, s.p.strain - 15);
       if (!guardBreak) incoming *= 0.5;
     }
@@ -246,7 +264,7 @@
     s.r.queue.push(planNext(s));
     if (pm === 'sense') {
       const shown = s.r.queue.map(m => m);
-      if (s.r.lieOwed) {
+      if (s.r.lieOwed && !CFG.noSenseLie) {
         const wrong = { type: shown[0].type === 'rush' ? 'blast' : 'rush' };
         shown[0] = wrong; s.r.lieOwed = false; ev.notes.push('sense-lied');
       }
@@ -261,7 +279,7 @@
     return s;
   }
 
-  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, DIFFS };
+  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, setStats, DIFFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.YadraCombat = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -429,7 +447,13 @@ const bg = document.createElement('canvas'); bg.width = W; bg.height = 160;
 // ---------- audio (WebAudio chiptune, no files) ----------
 let ac = null, muted = false, musicTimer = null, musicStep = 0;
 try { muted = localStorage.getItem('yadra_muted') === '1'; } catch (e) {}
+let speechUnlocked = false;
+function unlockSpeech() {
+  if (speechUnlocked || !window.speechSynthesis) return; speechUnlocked = true;
+  try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); speechSynthesis.resume(); } catch (e) {}
+}
 function initAudio() {
+  unlockSpeech();
   if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
   try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; return; }
   startMusic();
@@ -551,12 +575,15 @@ function say(text, opt) {
   else if (t.toUpperCase().indexOf(hero.name + ':') === 0) { who = 'gytis'; t = t.slice(hero.name.length + 1).trim(); }
   t = t.toLowerCase().replace(/\bki\b/g, 'kee').replace(/%/g, ' percent');
   try {
-    const u = new SpeechSynthesisUtterance(t), v = pickVoice(), id = ++speakId, V = VOICES[who], shout = !!(opt && opt.shout);
-    if (v) u.voice = v; u.lang = 'en-US';
+    const u = new SpeechSynthesisUtterance(t), id = ++speakId, V = VOICES[who], shout = !!(opt && opt.shout);
+    u.lang = 'en-US';
     u.rate = V.rate * (shout ? .9 : 1); u.pitch = V.pitch + (shout ? .15 : 0); u.volume = 1;
     u.onend = u.onerror = () => { if (id === speakId) speaking = false; };
-    speaking = true; speakDeadline = time + 2 + t.length * .11; // safety: never wait forever
-    speechSynthesis.speak(u);
+    speaking = true; speakDeadline = time + 3 + t.length * .11; // safety: never wait forever
+    setTimeout(() => {
+      if (id !== speakId) return;
+      try { const v = pickVoice(); if (v) u.voice = v; speechSynthesis.resume(); speechSynthesis.speak(u); } catch (e) { speaking = false; }
+    }, 120);
   } catch (e) { speaking = false; }
 }
 function setVoice(on) {
@@ -604,9 +631,9 @@ const parts = [], pops = [];
 
 function newGame(opts) {
   const seed = params.get('seed') ? Number(params.get('seed')) : (Date.now() & 0xffff) + 1;
-  C.setDifficulty(difficulty);
+  C.setDifficulty(difficulty); C.setStats(saveData && saveData.train);
   state = C.newFight(seed);
-  Object.assign(disp, { php: C.CFG.player.hp, pki: C.CFG.player.ki, pst: C.CFG.player.st, pstr: 0, rhp: C.CFG.roku.hp });
+  Object.assign(disp, { php: C.CFG.player.hp, pki: C.CFG.player.ki, pst: C.CFG.player.st, pstr: C.CFG.startStrain || 0, rhp: C.CFG.roku.hp });
   Object.assign(tgt, disp);
   displayKnown = []; over = null; script = []; si = 0; banner = null; reacted = {}; lastReactT = -9; lastShoutT = -9; lastBanterT = -9;
   Object.assign(P, { ox: 0, oy: 0, alpha: 1, flash: 0, auraCol: null, auraI: 0, ghosts: [], pose: 'idle', lean: 0, squash: 1, hurt: 0 });
@@ -912,7 +939,7 @@ function press(k) {
     return;
   }
   if (mode === 'anim') { if (k === 'ok' || k === 'back') { fast = true; stopSpeech(); } return; }
-  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
+  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (saveData) toTrain('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
   if (mode === 'menu') {
     if (state.p.collapsed) { if (k === 'ok') { sfx('ok'); doTurn('collapse'); } return; }
     let c = menuIdx % 2, r = menuIdx >> 1;
@@ -969,7 +996,7 @@ function habitTell() {
 function drawHud() {
   const s = state;
   textS(hero.name, 6, 6, '#80c8ff', 1);
-  const rows = [['HP', disp.php, C.CFG.player.hp, disp.php > 40 ? '#40d060' : '#e04040'], ['KI', disp.pki, 100, '#4090ff'], ['STA', disp.pst, C.CFG.player.st, '#f0d040']];
+  const rows = [['HP', disp.php, C.CFG.player.hp, disp.php > 40 ? '#40d060' : '#e04040'], ['KI', disp.pki, C.CFG.player.kiMax, '#4090ff'], ['STA', disp.pst, C.CFG.player.st, '#f0d040']];
   rows.forEach((r, i) => { const y = 16 + i * 10; textS(r[0], 6, y - 1, '#ffffff', 1); bar(26, y, 84, 6, r[1], r[2], r[3]); textS(String(Math.round(r[1])), 114, y - 1, '#ffffff', 1); });
   const sc = disp.pstr >= 75 ? '#ff3030' : disp.pstr >= 50 ? '#ffa020' : '#c8c840';
   const blink = disp.pstr >= 75 && Math.floor(time * 6) % 2 === 0;
@@ -1041,7 +1068,7 @@ function drawOver() {
   lines.forEach((l, i) => textS(l, 12, 170 + i * 16, '#ffffff', 2));
   textS(l2, 12, 170 + lines.length * 16 + 4, '#c8c8e8', 1);
   if (justSaved) textS('PROGRESS SAVED', 12, 219, '#80e0a0', 1);
-  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS('Z: FIGHT AGAIN   X: MENU', 12, 229, '#ffe060', 1);
+  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((saveData ? 'Z: TRAIN   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
 }
 
 // ---------- main loop ----------
@@ -1118,6 +1145,7 @@ function recordFight(win) { // progress is saved after every fight
   saveData.fights = (saveData.fights || 0) + 1;
   if (win) { saveData.wins = (saveData.wins || 0) + 1; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
+  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15);
   saveData.savedAt = Date.now();
   return writeSlot(curSlot, saveData);
 }
@@ -1272,9 +1300,99 @@ function drawCredits() {
   flatBg(); center('CREDITS', 10, '#ffd040', 2);
   ['YADRA: THE TWO SAIYANS', '', 'A FAN GAME MADE BY GYTIS', 'WITH HELP FROM CLAUDE CODE', '', 'INSPIRED BY DRAGON BALL', 'BY AKIRA TORIYAMA.', 'NOT AN OFFICIAL GAME.', 'NOT MADE TO EARN MONEY.', '', 'PRESS Z TO GO BACK'].forEach((l, i) => center(l, 40 + i * 16, i === 0 ? '#ffe060' : '#ffffff', 1));
 }
+
+// ================= training: Body / Ki / Focus, gravity chamber, Body Strain carried into the fight =================
+const GRAV = [{ g: 1, gain: 1, fat: 3 }, { g: 3, gain: 1, fat: 7 }, { g: 5, gain: 2, fat: 14 }, { g: 10, gain: 3, fat: 26 }, { g: 20, gain: 4, fat: 45 }];
+const TR_ITEMS = ['BODY', 'REST', 'KI', 'GRAVITY', 'FOCUS', 'FIGHT'], STAT_MAX = 12;
+let trIdx = 0, trMsg = '', trFlash = 0, trEvent = null, trEvIdx = 0;
+function trainOf() {
+  if (!saveData) saveData = { v: 1, hero, wins: 0, losses: 0, fights: 0, best: 0 };
+  const t = saveData.train || (saveData.train = {});
+  const n = (v, lo, hi, d) => Math.max(lo, Math.min(hi, v === undefined ? d : (v | 0)));
+  t.body = n(t.body, 0, STAT_MAX, 0); t.ki = n(t.ki, 0, STAT_MAX, 0); t.focus = n(t.focus, 0, STAT_MAX, 0);
+  t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
+  return t;
+}
+function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
+function toTrain(line) {
+  stopSpeech(); trainOf(); mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
+  P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
+}
+function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' NO TURNS LEFT. GO FIGHT.'; }
+function trApply(stat, lv) { // one training turn at gravity level lv
+  const t = trainOf(); t.sessions--;
+  if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
+  const before = t[stat]; t[stat] = Math.min(STAT_MAX, t[stat] + lv.gain); t.fatigue += lv.fat;
+  const got = t[stat] - before;
+  trAfter((got ? stat.toUpperCase() + ' +' + got : stat.toUpperCase() + ' IS FULL') + '.  STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
+}
+function trainPress(k) {
+  const t = trainOf();
+  if (mode === 'tevent') {
+    if (k === 'up' || k === 'down') { trEvIdx ^= 1; sfx('move'); }
+    else if (k === 'ok' || k === 'back') {
+      const e = trEvent; trEvent = null; mode = 'train';
+      if (k === 'ok' && trEvIdx === 0) { const lv = GRAV[e.gi + 1]; trApply(e.stat, lv); trMsg = 'YOU HELD ' + lv.g + 'X! ' + trMsg; }
+      else { trApply(e.stat, { g: 1, gain: 1, fat: 3 }); trMsg = 'YOU SHUT IT OFF. ' + trMsg; }
+    }
+    return true;
+  }
+  let c = trIdx % 2, r = trIdx >> 1;
+  if (k === 'left' && c > 0) c--; else if (k === 'right' && c < 1) c++; else if (k === 'up' && r > 0) r--; else if (k === 'down' && r < 2) r++;
+  else if (k === 'back') { sfx('move'); toTitle(); return true; }
+  if (k === 'left' || k === 'right' || k === 'up' || k === 'down') { const n = r * 2 + c; if (n !== trIdx) sfx('move'); trIdx = n; return true; }
+  if (k !== 'ok') return true;
+  const it = TR_ITEMS[trIdx];
+  if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
+  if (it === 'GRAVITY') { t.grav = (t.grav + 1) % GRAV.length; sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
+  if (t.sessions <= 0) { sfx('bad'); trMsg = 'NO TURNS LEFT. GO FIGHT.'; return true; }
+  if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
+  const stat = it.toLowerCase();
+  if (t[stat] >= STAT_MAX) { sfx('bad'); trMsg = it + ' IS ALREADY FULL.'; return true; }
+  const gi = t.grav;
+  if (gi >= 1 && gi < GRAV.length - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
+  trApply(stat, GRAV[gi]); return true;
+}
+function drawTrain() {
+  const t = trainOf(), lv = GRAV[t.grav];
+  flatBg(); trFlash = Math.max(0, trFlash - 1 / 60);
+  center('TRAINING', 6, '#ffd040', 2);
+  const tremble = (mode === 'tevent' ? 2 : (t.grav >= 3 ? 1 : 0)), jx = tremble ? Math.round((Math.random() - .5) * tremble * 2) : 0;
+  if (t.grav >= 2) { ctx.fillStyle = 'rgba(180,30,30,' + (0.06 * t.grav) + ')'; ctx.fillRect(0, 26, W, 130); }
+  ctx.drawImage(P.set.img.idle0, Math.round(58 - P.set.w), 128 - P.set.h * 2 + 2 + (lv.g >= 5 ? 3 : 0), P.set.w * 2, P.set.h * 2);
+  const hpN = 170 + C.CFG.train.hpPerBody * t.body, kiN = 100 + C.CFG.train.kiPerKi * t.ki, rdC = Math.round((1 - Math.max(0.4, 1 - C.CFG.train.readCutPerFocus * t.focus)) * 100);
+  [['BODY', t.body, '#e0a040', 'HP ' + hpN], ['KI', t.ki, '#4090ff', 'KI ' + kiN], ['FOCUS', t.focus, '#60e0c0', 'READ -' + rdC + '%']].forEach((r, i) => {
+    const y = 34 + i * 20;
+    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2]); textS('LV ' + r[1], 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
+  });
+  const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
+  textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
+  textS('YOU START THE FIGHT AT STRAIN ' + Math.min(80, t.fatigue), 116, 108, t.fatigue >= 50 ? '#ffa020' : '#8888b0', 1);
+  textS('TURNS LEFT: ' + t.sessions, 116, 120, t.sessions ? '#ffe060' : '#ff8080', 1);
+  wrap(trMsg, 34).slice(0, 2).forEach((l, i) => textS(l, 8, 141 + i * 10, '#c8f0ff', 1));
+  panelBox();
+  if (mode === 'tevent') {
+    const up = GRAV[trEvent.gi + 1];
+    textS('GRAVITY SURGES TO ' + up.g + 'X!', 14, 168, '#ff6060', 2);
+    [['HOLD ON', 'BIG GAIN +' + up.gain + ', STRAIN +' + up.fat], ['SHUT IT OFF', 'SAFE. +1, STRAIN +3']].forEach((o, i) => {
+      const y = 188 + i * 17, sel = i === trEvIdx;
+      if (sel) textS('>', 10, y, '#ffe060', 2);
+      textS(o[0], 28, y, sel ? '#ffe060' : '#ffffff', 2); textS(o[1], 150, y + 4, '#a8a8c8', 1);
+    });
+  } else {
+    TR_ITEMS.forEach((it, i) => {
+      const c = i % 2, r = i >> 1, x = 14 + c * 152, y = 168 + r * 18, sel = i === trIdx;
+      const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= STAT_MAX;
+      const off = (t.sessions <= 0 && it !== 'FIGHT' && it !== 'GRAVITY') || full;
+      if (sel) textS('>', x - 4, y, '#ffe060', 2);
+      textS(it === 'GRAVITY' ? 'GRAV ' + lv.g + 'X' : it, x + 10, y, off ? '#666680' : (sel ? '#ffe060' : '#ffffff'), 2);
+    });
+  }
+  if (trFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + trFlash + ')'; ctx.fillRect(0, 26, W, 130); }
+}
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
-  else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else return false;
+  else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else return false;
   return true;
 }
 function creatorTyping(e) { // the name box takes real keyboard letters
@@ -1288,6 +1406,7 @@ function creatorTyping(e) { // the name box takes real keyboard letters
   return false;
 }
 function menuPress(k) {
+  if (mode === 'train' || mode === 'tevent') return trainPress(k);
   if (mode === 'title') {
     if (k === 'up') { titleIdx = (titleIdx + 3) % 4; sfx('move'); }
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
@@ -1309,7 +1428,8 @@ function menuPress(k) {
       if (slotPurpose === 'continue') {
         if (!d) { sfx('bad'); return true; }
         sfx('ok'); hero = cleanHero(d.hero); curSlot = slotIdx; saveData = d; P.set = makeHeroSet(hero); stopSpeech();
-        newGame({ line: 'BACK AGAIN, ' + hero.name + '? GOOD. I WANT A REAL FIGHT.' });
+        if (d.fights > 0) toTrain('ROKU: BACK, ' + hero.name + '? TRAIN FIRST.');
+        else newGame({ line: 'BACK AGAIN, ' + hero.name + '? GOOD. I WANT A REAL FIGHT.' });
       } else {
         if (d && !slotConfirm) { slotConfirm = true; sfx('warn'); return true; }
         sfx('ok'); curSlot = slotIdx; slotConfirm = false; cr = Object.assign({}, DEFAULT_HERO); crRow = 0; mode = 'creator';
