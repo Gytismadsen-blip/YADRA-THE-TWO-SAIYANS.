@@ -51,6 +51,7 @@
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
+    if (Array.isArray(st.tech) && st.tech.indexOf('steady') >= 0) CFG.moves.lance.strain = Math.max(20, CFG.moves.lance.strain - 10); // the Steady Spirit technique
   }
 
   // A weaker/other enemy on the same brain. Call after setDifficulty and BEFORE setStats.

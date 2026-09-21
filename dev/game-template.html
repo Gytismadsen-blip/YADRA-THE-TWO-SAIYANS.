@@ -200,7 +200,15 @@ function boarGrid(pose) {
   return g.map(r => r.join(''));
 }
 const SET_BOAR = makeSet({ idle0: boarGrid('idle0'), idle1: boarGrid('idle1'), atk: boarGrid('atk') }, PAL_BOAR);
-const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
+const PAL_M = { K:'#e8e8f0', S:'#dca880', B:'#101010', R:'#4060e0', D:'#302060', O:'#e8e0f8', A:'#8a6ab0', Y:'#f0c860' };
+const PAL_M2 = { K:'#b0d0ff', S:'#dca880', B:'#101010', R:'#ffffff', D:'#302060', O:'#c8e8ff', A:'#60a0ff', Y:'#ffffff' };
+const SET_M = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_M), SET_M2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_M2);
+const PAL_V = { K:'#f0c030', S:'#e0b090', B:'#101010', R:'#30b0ff', D:'#183070', O:'#2050b0', A:'#c0c8d8', Y:'#f0c030' };
+const PAL_V2 = { K:'#ffe860', S:'#e0b090', B:'#101010', R:'#ff3030', D:'#601010', O:'#c02020', A:'#ffb020', Y:'#ffffff' };
+const SET_V = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V), SET_V2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V2);
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.2, dmg: 1.15, late: .9, plan: .85, fury: true, voice: 'master', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
+  rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.08, dmg: 1.04, late: .7, plan: .6, fury: true, voice: 'rival', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
+  boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
   bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
 let foe = FOES.roku;
 
@@ -353,7 +361,7 @@ function pickVoice() {
          v.find(x => /aria|guy|jenny|zira|david|mark/i.test(x.name)) || v[0] || null;
 }
 function stopSpeech() { speakId++; speaking = false; if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {} }
-const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 }, bandit: { pitch: 1.05, rate: 1.22 }, beast: { pitch: .5, rate: .8 } };
+const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 }, bandit: { pitch: 1.05, rate: 1.22 }, beast: { pitch: .5, rate: .8 }, master: { pitch: .8, rate: .82 }, rival: { pitch: .9, rate: 1.08 } };
 function say(text, opt) {
   if (!voiceOn || !window.speechSynthesis) return;
   stopSpeech();
@@ -459,6 +467,30 @@ FOES.boar.over = function (win, st) {
   if (win) return fled ? 'THE BOAR ESCAPED INTO THE WOODS...' : 'YOU WORE IT OUT! MEAT FOR DINNER.';
   return 'THE BOAR RAMMED YOU. TRY AGAIN TOMORROW.';
 };
+function makeTr(o) { // turns the standard fight lines into this enemy's own words
+  const t = { 'ROKU TRIED TO READ YOU. YOU CHANGED IT UP!': o.missed, 'ROKU CHANGED HIS PLAN AFTER READING YOU!': o.changed, 'ROKU IS DOWN!': o.down, 'ROKU GUARDS!': o.guard, 'ROKU COUNTERS YOUR STRIKE!': o.counter,
+    'ROKU SENDS YOUR BLAST BACK!': o.sendback, 'ROKU FIRES A BLAST!': o.fire, 'ROKU TRACKS YOUR STEP!': o.track, 'ROKU BREAKS YOUR CHARGE!': o.breakcharge, 'ROKU BREAKS YOUR GUARD!': o.breakguard,
+    'ROKU ATTACKS!': o.attack, 'ROKU RUSHES IN!': o.rush, "ROKU: OKAY. NOW I'M SERIOUS! HIS KI SHIFTS, SENSE IS LESS RELIABLE.": o.phase2, 'Come on!': o.shouts[0], 'Ki Blast!': o.shouts[1], 'Here I come!': o.shouts[2] };
+  Object.keys(READ_LINE).forEach(k => { t['ROKU: ' + READ_LINE[k]] = o.who + ': ' + o.read[k]; }); return t;
+}
+FOES.master.tr = makeTr({ who: 'MASTER', missed: 'THE MASTER SMILES. YOU CHANGED YOUR RHYTHM.', changed: 'THE MASTER CALMLY ADJUSTS HIS STANCE.', down: 'THE MASTER BOWS. THE DUEL IS OVER.', guard: 'THE MASTER SETTLES INTO A CALM GUARD.', counter: 'THE MASTER REDIRECTS YOUR STRIKE.',
+  sendback: 'THE MASTER RETURNS YOUR BLAST GENTLY.', fire: 'THE MASTER RELEASES A SLOW BLAST.', track: 'THE MASTER FOLLOWS YOUR STEP WITHOUT MOVING.', breakcharge: 'THE MASTER INTERRUPTS YOUR CHARGE.', breakguard: 'THE MASTER FINDS A GAP IN YOUR GUARD.',
+  attack: 'THE MASTER MOVES.', rush: 'THE MASTER GLIDES FORWARD.', phase2: 'MASTER: THE SPIRIT SHIFTS. TRUST YOURSELF, NOT YOUR SENSE.', shouts: ['Breathe.', 'Release.', 'Now.'],
+  read: { lance: 'YOU RELY ON THE SPIRIT LANCE. SO PREDICTABLE.', strike: 'YOU STRIKE FIRST. THAT IS YOUR HABIT.', blast: 'YOU BLAST AGAIN. I EXPECTED IT.', phantom: 'YOUR STEP IS LOUD. I HEAR IT.', charge: 'YOU HIDE IN CHARGING. BREATHE INSTEAD.', guard: 'GUARDING IS FEAR. I SEE IT.', sense: 'YOU WATCH ME. WATCH YOURSELF.' } });
+FOES.master.react = { s75: 'MASTER: YOUR BODY SCREAMS. CALM IT.', s75b: 'MASTER: ONE MORE AND YOU FALL. LISTEN TO YOURSELF.', s50: 'MASTER: POWER WITHOUT CONTROL. STRAIN RISES.', lance: 'MASTER: A STRONG STRIKE. BUT LOUD.', dodge: 'MASTER: GOOD. YOU MOVED LIKE WATER.',
+  sense: 'MASTER: YOU LOOK INTO ME. I WILL NOT SHOW THE TRUTH.', kilow: 'MASTER: YOUR KI IS LOW. BREATHE AND CHARGE.', hplow: 'MASTER: YOU ARE AT YOUR LIMIT, {N}. STOP OR CONTINUE?', rlow: 'MASTER: GOOD. YOU HAVE REACHED ME.' };
+FOES.master.banter = { hit: ['PATIENCE.', 'BREATHE.'], hurt: ['WELL DONE.', 'HMM. GOOD.'], guard: ['YOU HIDE. WHY?'], charge: ['A CALM MIND NEEDS NO CHARGE.'], low: ['GOOD. YOU ARE LEARNING.'], other: ['AGAIN.', 'FOCUS.'] };
+FOES.master.info = { strike: ['12 DAMAGE.', 'HE GUARDS OFTEN AND', 'REDIRECTS IT.'], blast: ['18 DAMAGE.', 'HE READS BLASTS AND', 'SENDS THEM BACK.'], charge: ['+40 KI.', 'HE WAITS. HARD TO', 'BREAK.'], sense: ['SEE HIS NEXT', '2 MOVES.', 'HE MAY LIE.'] };
+FOES.master.over = (win) => win ? 'MASTER: YOUR SPIRIT IS CLEAR. WELL DONE.' : 'MASTER: BREATHE. TRY AGAIN.';
+FOES.rival.tr = makeTr({ who: 'RIVAL', missed: 'THE RIVAL GRITS HIS TEETH. HE MISSED!', changed: 'THE RIVAL SNARLS AND CHANGES HIS PLAN!', down: 'THE RIVAL FALLS TO ONE KNEE...', guard: 'THE RIVAL CROSSES HIS ARMS. HE HATES GUARDING!', counter: 'THE RIVAL SMASHES YOUR STRIKE!',
+  sendback: 'THE RIVAL HURLS YOUR BLAST BACK!', fire: 'THE RIVAL FIRES A HUGE BLAST!', track: 'THE RIVAL SPOTS YOU. NO ESCAPE!', breakcharge: 'THE RIVAL CRUSHES YOUR CHARGE!', breakguard: 'THE RIVAL SHATTERS YOUR GUARD!',
+  attack: 'THE RIVAL ATTACKS!', rush: 'THE RIVAL CHARGES IN!', phase2: 'RIVAL: I REFUSE TO LOSE! HERE IS MY REAL POWER!', shouts: ['Fight me!', 'Take this!', 'Haaah!'],
+  read: { lance: 'NOT THAT AGAIN! I WILL CRUSH IT!', strike: 'A PUNCH? PATHETIC!', blast: 'THAT BLAST? BACK AT YOU!', phantom: 'STOP DANCING AND FIGHT!', charge: 'CHARGING?! I WILL BREAK YOU!', guard: 'HIDING?! COWARD!', sense: 'STOP STARING! FIGHT ME!' } });
+FOES.rival.react = { s75: 'RIVAL: HA! LOOK AT YOU SHAKE!', s75b: 'RIVAL: ONE MORE HIT AND YOU ARE DONE!', s50: 'RIVAL: YOU BURN OUT ALREADY?!', lance: 'RIVAL: TSK! NOT BAD... BUT NOT ENOUGH!', dodge: 'RIVAL: HOW DID YOU DODGE THAT?!',
+  sense: 'RIVAL: STOP LOOKING INTO ME!', kilow: 'RIVAL: NO KI LEFT? THIS IS MY CHANCE!', hplow: 'RIVAL: YOU ARE FINISHED, {N}!', rlow: 'RIVAL: I WILL NOT LOSE! NOT TO YOU!' };
+FOES.rival.banter = { hit: ['TOO SLOW!', 'IS THAT ALL?!', 'KNEEL!'], hurt: ['GRR! LUCKY HIT!', 'YOU WILL PAY FOR THAT!'], guard: ['STOP HIDING!'], charge: ["I WON'T LET YOU CHARGE!"], low: ['I WILL NEVER GIVE UP!', 'I AM THE CHAMPION!'], other: ['COME ON!', 'FIGHT ME!'] };
+FOES.rival.info = { strike: ['12 DAMAGE.', 'HE SMASHES A LAZY', 'STRIKE BACK.'], blast: ['18 DAMAGE.', 'HE SENDS BLASTS BACK', 'HARD.'], charge: ['+40 KI.', 'HE RUSHES ANYONE', 'WHO CHARGES.'], sense: ['SEE HIS NEXT', '2 MOVES.', 'HE RAGES AT HALF HP.'] };
+FOES.rival.over = (win) => win ? 'RIVAL: IMPOSSIBLE... I LOST?!' : 'RIVAL: HA! WEAK. COME BACK LATER.';
 const foeInfo = mv => (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name)));
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
 
@@ -478,7 +510,7 @@ const parts = [], pops = [];
 
 function newGame(opts) {
   const seed = params.get('seed') ? Number(params.get('seed')) : (Date.now() & 0xffff) + 1;
-  foe = FOES[(opts && opts.foe) || 'roku'] || FOES.roku; C.setDifficulty(difficulty); C.setFoe(foe.id === 'roku' ? null : foe); C.setStats(saveData && saveData.train);
+  foe = FOES[(opts && opts.foe) || 'roku'] || FOES.roku; C.setDifficulty(difficulty); C.setFoe(foe.id === 'roku' ? null : foe); C.setStats(saveData && Object.assign({}, saveData.train, { tech: saveData.tech }));
   state = C.newFight(seed);
   Object.assign(disp, { php: C.CFG.player.hp, pki: C.CFG.player.ki, pst: C.CFG.player.st, pstr: C.CFG.startStrain || 0, rhp: C.CFG.roku.hp });
   Object.assign(tgt, disp);
@@ -693,7 +725,7 @@ function buildScript(ev, after, hadKnown) {
   // 5. narration
   if (notes.includes('phase2') && !state.over) S.push({ dur: 1.4, speak: true, msg: hero.name + ': HIS POWER JUST JUMPED! I MUST BE CAREFUL.', start() { popup('!', P.x - 4, P.y - 84, '#ffe060', 2); } });
   if (notes.includes('phase2')) S.push({ dur: 1.6, speak: true, cine: true, msg: "ROKU: OKAY. NOW I'M SERIOUS! HIS KI SHIFTS, SENSE IS LESS RELIABLE.",
-    start() { sfx('warn'); R.set = SET_R2; R.form = 2; R.auraCol = '#ff5020'; R.auraI = 1; shake = 6; flashScr = .5; },
+    start() { sfx('warn'); R.set = foe.set2 || SET_R2; R.form = 2; R.auraCol = '#ff5020'; R.auraI = 1; shake = 6; flashScr = .5; },
     upd(u) { R.squash = 1 + .06 * Math.sin(u * Math.PI * 6); },
     draw(u) { const rr = u * 150; ctx.globalAlpha = 1 - u; ctx.fillStyle = '#ffb040'; for (let i = 0; i < 40; i++) { const ang = i / 40 * Math.PI * 2; ctx.fillRect(Math.round(R.x + Math.cos(ang) * rr), Math.round(R.y - 40 + Math.sin(ang) * rr * .7), 4, 4); } ctx.globalAlpha = 1; } });
   if (notes.includes('collapse-next')) S.push({ dur: 1.4, speak: true, msg: 'STRAIN AT MAX! YOUR BODY GIVES OUT NEXT TURN!', start() { sfx('warn'); shake = 5; } });
@@ -768,7 +800,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -782,6 +814,7 @@ cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
   if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice'); else if (!touchMode && inside(BTN_F)) press('full');
+  { const rawX = x + (mode === 'village' ? CW - W : OFFX); if (mode === 'village' && y < 14 && rawX > CW - 70) press('map'); }
 });
 function toggleFullscreen() {
   const d = document.documentElement;
@@ -789,6 +822,7 @@ function toggleFullscreen() {
 }
 function press(k) {
   if (k === 'full') { toggleFullscreen(); return; }
+  if (k === 'map') { toggleMap(); return; }
   if (k === 'mute') { setMuted(!muted); if (!muted) sfx('ok'); return; }
   if (k === 'voice') { setVoice(!voiceOn); return; }
   if (menuPress(k)) return;
@@ -861,7 +895,7 @@ function drawHud() {
   textS('STR', 6, 45, blink ? '#ff6060' : '#ffffff', 1); bar(26, 46, 84, 6, disp.pstr, 100, sc, { marks: [50, 75] }); textS(String(Math.round(disp.pstr)), 114, 45, sc, 1);
   textS('TURN ' + (s.t + 1), 140, 6, '#c8c8e8', 1);
   textS(foe.name, 206, 6, '#ff8080', 1);
-  if (R.form === 2) textS('FURY', 240, 6, '#ff3030', 1);
+  if (R.form === 2) textS(foe.furyLabel || 'FURY', 240, 6, '#ff3030', 1);
   bar(206, 16, 108, 6, disp.rhp, C.CFG.roku.hp, R.form === 2 ? '#ff5030' : '#e05050', { marks: [C.CFG.roku.phase2At] });
   textS(String(Math.round(disp.rhp)), 206, 24, '#ffffff', 1);
   // sense info
@@ -1007,6 +1041,7 @@ function drawSides() {
 }
 function render() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
+  if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); ctx.restore(); return; }
   if (mode === 'village') { drawVillage(); ctx.save(); ctx.translate(CW - W, 0); drawToggles(); ctx.restore(); return; } // buttons sit at the right end of the wide box
   ctx.save(); ctx.translate(OFFX, 0);
   if (OFFX > 0) drawSides();
@@ -1238,7 +1273,7 @@ const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left t
 function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
 function toTrain(line) {
-  stopSpeech(); trainOf(); mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
+  stopSpeech(); { const tt = trainOf(); if (tt.grav >= (trainHall ? GRAV.length : 4)) tt.grav = 0; } mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
   P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
 }
 function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' IT IS NIGHT. SLEEP AT HOME.'; }
@@ -1267,13 +1302,13 @@ function trainPress(k) {
   if (k !== 'ok') return true;
   const it = TR_ITEMS[trIdx];
   if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
-  if (it === 'GRAVITY') { t.grav = (t.grav + 1) % GRAV.length; sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
+  if (it === 'GRAVITY') { t.grav = (t.grav + 1) % (trainHall ? GRAV.length : 4); sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
   if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
   if (t[stat] >= statCap()) { sfx('bad'); trMsg = it + ' IS AT ITS CAP (' + statCap() + '). BEAT ROKU OR DO MISSIONS TO RAISE IT.'; return true; }
   const gi = t.grav;
-  if (gi >= 1 && gi < GRAV.length - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
+  if (gi >= 1 && gi < (trainHall ? GRAV.length : 4) - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
 }
 function drawTrain() {
@@ -1323,11 +1358,13 @@ const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 134 }, { x: 118, y: 150 }, { x:
 for (let x = 330; x < 632; x += 26) { V_TREES.push({ x: x + ((x / 26) % 2) * 8, y: 70 + ((x / 26) % 3) * 10 }); } // treeline north of the east path
 for (let i = 0; i < 70; i++) { const x = 340 + ((i * 97) % 290), y = 132 + ((i * 61) % 262); if (x > V_LAKE.x0 - 14 && x < V_LAKE.x1 + 14 && y > V_LAKE.y0 - 14 && y < V_LAKE.y1 + 24) continue; if (y > 300 && y < 336 && x < 372) continue; V_TREES.push({ x, y }); }
 for (let i = 0; i < 16; i++) V_TREES.push({ x: 10 + ((i * 41) % 130), y: 350 + ((i * 29) % 44) }); // south-west woods
-const V_SIGNS = [{ x: 318, y: 124, text: 'EAST: THE FOREST PATH. TRAVELLERS WELCOME.' }, { x: 618, y: 124, gate: true, text: 'THE GATE IS SHUT. ROKU SAYS THE FOREST IS NOT SAFE YET.' }, { x: 170, y: 322, text: 'LAKE THIS WAY. NO FEEDING THE FISH ROKU.' }];
+const V_SIGNS = [{ x: 174, y: 386, text: 'SOUTH: THE ROAD TO MIRAKAI. ONLY FIGHTERS WHO BEAT ROKU MAY PASS.' }, { x: 318, y: 124, text: 'EAST: THE FOREST PATH. TRAVELLERS WELCOME.' }, { x: 618, y: 124, gate: true, text: 'THE GATE IS SHUT. ROKU SAYS THE FOREST IS NOT SAFE YET.' }, { x: 170, y: 322, text: 'LAKE THIS WAY. NO FEEDING THE FISH ROKU.' }];
 const ROOMS = {
+  hut: { w: 180, h: 120, door: 90, miny: 56, name: 'HOUSE', solids: [[10, 58, 52, 76], [98, 72, 148, 90]] },
   home: { w: 200, h: 140, door: 100, miny: 56, name: 'YOUR HOME', solids: [[12, 58, 60, 76], [92, 74, 144, 90], [116, 30, 184, 52]] },
   ramen: { w: 240, h: 150, door: 120, miny: 70, name: 'RAMEN HOUSE', solids: [[24, 52, 216, 68], [36, 92, 80, 110], [160, 96, 204, 114]] } };
 const ROOM_PEOPLE = {
+  hut: [],
   home: [{ name: 'MOM', role: 'mom', x: 152, y: 80, body: '#e0a0c0', hair: '#603020', lines: ['MOM: YOU TRAIN TOO HARD. SIT. EAT.'] }],
   ramen: [
     { name: 'COOK', role: 'cook', x: 120, y: 52, body: '#f4f4f4', hair: '#402010', lines: [] },
@@ -1354,16 +1391,17 @@ const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
 Object.keys(ROOM_PEOPLE).forEach(k => ROOM_PEOPLE[k].forEach(p => { p.face = 1; p.step = 0; p.line = 0; }));
-function curPeople() { return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
+function curPeople() { if (TOWNS[area]) return townPeople(); return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
 function toVillage(line) {
   stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vAfterTalk = null; vMenu = null; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
 function enterRoom(name) { area = name; vx = ROOMS[name].door; vy = ROOMS[name].h - 16; vFade = 1; vWalk = 0; vMsg = ''; sfx('ok'); }
-function exitRoom() { const b = area === 'home' ? V_HOME : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
+function exitRoom() { if (area === 'hut' && hutReturn) { area = hutReturn.area; vx = hutReturn.x; vy = hutReturn.y; vFade = 1; vWalk = 0; vMsg = ''; sfx('move'); return; } const b = area === 'home' ? V_HOME : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
 function vNearPerson() { let best = -1, bd = 26; curPeople().forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
   if (area === 'forest') return forestTarget();
+  if (TOWNS[area]) return townTarget();
   if (area === 'home' && vx > 6 && vx < 74 && vy > 76 && vy < 100 && vNearPerson() < 0) return 'bed';
   if (area !== 'village') return vNearPerson() >= 0 ? 'person' : null;
   const low = (b) => vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22;
@@ -1375,6 +1413,7 @@ function vTarget() { // what can I use right now?
 }
 function vSolid(x, y) {
   if (area === 'forest') return forestSolid(x, y);
+  if (TOWNS[area]) return townSolid(x, y);
   if (area !== 'village') return ROOMS[area].solids.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3]);
   const inB = b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1;
   if (inB(V_TRAIN) || inB(V_RAMEN) || inB(V_ARENA) || inB(V_REST) || inB(V_HOME)) return true;
@@ -1388,7 +1427,8 @@ function villageUpdate(dt) {
   const near = vNearPerson(), nearP = curPeople()[near];
   if (area === 'forest' && !vTalk && vBanditT <= 0) { const bs = boarSpot(); if (bs && Math.hypot(vx - bs.x, vy - bs.y) < 34) { vTalk = 'A WILD BOAR BLOCKS THE TRAIL! IT SNORTS AND PAWS THE GROUND. (HUNT: COSTS TIME, STRAIN +8)'; vAfterTalk = fightBoar; vBanditT = 8; sfx('warn'); say(vTalk); } }
   if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
-  if (area === 'village') V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
+  const wl = area === 'village' ? V_PEOPLE : TOWNS[area] ? townPeople() : null;
+  if (wl) wl.forEach((p, i) => { // wander, but stand still while you are close or talking
     if (p === nearP || vTalk || (p.hidden && questOf().step < 3)) return;
     if (p.wait > 0) { p.wait -= dt; return; }
     const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
@@ -1402,16 +1442,22 @@ function villageUpdate(dt) {
       const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
       let minX = 10, maxX = WORLD.w - 10, minY = 100, maxY = WORLD.h - 8;
       if (area === 'village' && !gateOpen()) maxX = 616;
-      if (area === 'forest') { minX = 3; maxX = FOREST.w - 10; minY = 40; maxY = FOREST.h - 8; }
+      if (area === 'village' && !southOpen()) maxY = 384;
+      if (TOWNS[area]) { const T = TOWNS[area]; minX = 4; maxX = T.w - 4; minY = T.minY; maxY = T.h - 6; }
+      else if (area === 'forest') { minX = 3; maxX = FOREST.w - 10; minY = 40; maxY = FOREST.h - 8; }
       else if (area !== 'village') { const r = ROOMS[area]; minX = 10; maxX = r.w - 10; minY = r.miny; maxY = r.h - 8; if (Math.abs(vx - r.door) <= 18) maxY = r.h; }
       const nx = Math.max(minX, Math.min(maxX, vx + dx * sp)), ny = Math.max(minY, Math.min(maxY, vy + dy * sp));
       if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
-      if (area === 'village' && vx >= 626 && gateOpen()) enterForest();
+      if (area === 'village' && vy >= WORLD.h - 12 && Math.abs(vx - 160) <= 24 && southOpen()) enterArea('r4', 'village');
+      else if (area === 'village' && vx >= 626 && gateOpen()) enterForest();
+      else if (area === 'forest' && vx >= FOREST.w - 14 && questOf().step >= 3) enterArea('r1', 'forest');
       else if (area === 'forest' && vx <= 5) exitForest();
-      else if (area !== 'village' && area !== 'forest' && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
+      else if (TOWNS[area]) townExits();
+      else if (ROOMS[area] && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
     } else vWalk = 0;
   }
   if (area === 'village') { camX = Math.round(Math.max(0, Math.min(WORLD.w - CW, vx - CW / 2))); camY = Math.round(Math.max(0, Math.min(WORLD.h - 196, vy - 100))); }
+  else if (TOWNS[area]) { const T = TOWNS[area]; camX = Math.round(Math.max(0, Math.min(T.w - CW, vx - CW / 2))); camY = Math.round(Math.max(0, Math.min(T.h - 196, vy - 100))); }
   else if (area === 'forest') { camX = Math.round(Math.max(0, Math.min(FOREST.w - CW, vx - CW / 2))); camY = Math.round(Math.max(0, Math.min(FOREST.h - 196, vy - 100))); }
   else { const r = ROOMS[area]; camX = -Math.round((CW - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
 }
@@ -1444,11 +1490,12 @@ function villagePress(k) {
     else if (k === 'ok') vPick(menuItems()[vMenu.idx]);
     return true;
   }
-  if (k === 'back') { if (area !== 'village') { exitRoom(); return true; } sfx('move'); toTitle(); return true; }
+  if (k === 'back') { if (ROOMS[area]) { exitRoom(); return true; } if (area !== 'village') return true; sfx('move'); toTitle(); return true; }
   if (k !== 'ok') return true;
   const t = trainOf(), tg = vTarget();
   if (!tg && area === 'forest') { senseNow(); return true; }
-  if (tg === 'train') { sfx('ok'); toTrain('ROKU: PICK YOUR TRAINING.'); }
+  if (tg && tg.slice(0, 2) === 't:') { townAct(tg); return true; }
+  if (tg === 'train') { sfx('ok'); trainHall = false; toTrain('ROKU: PICK YOUR TRAINING.'); }
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
   else if (tg === 'ramen') enterRoom('ramen');
   else if (tg === 'home') enterRoom('home');
@@ -1517,7 +1564,13 @@ function drawRoom() {
   rr(0, 40, r.w, r.h - 40, '#8a6a44'); ctx.fillStyle = '#7a5a38'; for (let y = 48; y < r.h; y += 10) ctx.fillRect(0, y, r.w, 1);
   rr(0, 0, r.w, 40, '#5a4a6a'); rr(0, 36, r.w, 4, '#3a2a4a'); rr(0, 0, r.w, 2, '#7a6a8a');
   rr(r.door - 14, r.h - 8, 28, 8, '#6a3a2a'); rr(r.door - 12, r.h - 6, 24, 4, '#8a4a3a');
-  if (area === 'home') {
+  if (area === 'hut') {
+    rr(20, 8, 26, 20, '#3a2a4a'); rr(22, 10, 22, 16, '#90c8ff'); rr(32, 10, 2, 16, '#3a2a4a'); rr(22, 17, 22, 2, '#3a2a4a');
+    rr(56, 94, 68, 18, '#8a5a3a'); rr(58, 96, 64, 14, '#a86a40'); rr(66, 100, 48, 6, '#e0c060');
+    rr(10, 58, 44, 18, '#7a4a2a'); rr(12, 52, 40, 8, '#e8e8f0'); rr(14, 46, 12, 8, '#f8f8ff'); rr(12, 60, 40, 14, '#a05a5a');
+    rr(98, 74, 50, 14, '#a06a3a'); rr(98, 86, 50, 3, '#7a4a2a'); rr(106, 70, 8, 5, '#f0f0f0'); rr(124, 71, 8, 4, '#e0a040');
+    rr(128, 28, 34, 18, '#6a6a7a'); rr(130, 20, 10, 10, '#404050');
+  } else if (area === 'home') {
     rr(20, 8, 26, 20, '#3a2a4a'); rr(22, 10, 22, 16, '#90c8ff'); rr(32, 10, 2, 16, '#3a2a4a'); rr(22, 17, 22, 2, '#3a2a4a');
     rr(60, 100, 80, 24, '#a04040'); rr(62, 102, 76, 20, '#c05050'); rr(70, 108, 60, 8, '#e0c060');
     rr(12, 58, 48, 18, '#7a4a2a'); rr(14, 52, 44, 8, '#e8e8f0'); rr(16, 46, 14, 8, '#f8f8ff'); rr(14, 60, 44, 14, '#5a7ac0');
@@ -1532,7 +1585,7 @@ function drawRoom() {
     textS('MENU', 200, 24, '#ffe060', 1);
   }
   drawPeopleAndPlayer();
-  textS(r.name, Math.round(r.w / 2 - textW(r.name) / 2), 4, '#ffe060', 1);
+  { const rn = area === 'hut' ? hutTitle : r.name; textS(rn, Math.round(r.w / 2 - textW(rn) / 2), 4, '#ffe060', 1); }
 }
 function drawWorld() {
   ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, WORLD.w, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, WORLD.w, 12);
@@ -1542,7 +1595,7 @@ function drawWorld() {
   ctx.fillStyle = '#e8d060'; for (let i = 0; i < 40; i++) ctx.fillRect(12 + ((i * 71) % 610), 124 + ((i * 41) % 260), 2, 2);
   ctx.fillStyle = '#e07090'; for (let i = 0; i < 20; i++) ctx.fillRect(30 + ((i * 113) % 590), 130 + ((i * 59) % 250), 2, 2);
   ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(258, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(154, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
-  ctx.fillRect(280, 102, 350, 16); ctx.fillRect(154, 118, 12, 214); ctx.fillRect(154, 320, 228, 12);
+  ctx.fillRect(280, 102, 350, 16); ctx.fillRect(154, 118, 12, 282); ctx.fillRect(154, 320, 228, 12);
   ctx.fillStyle = '#a08850'; for (let i = 0; i < 24; i++) ctx.fillRect(44 + i * 10, 104 + (i % 3) * 5, 3, 2); for (let i = 0; i < 34; i++) ctx.fillRect(284 + i * 10, 106 + (i % 3) * 4, 3, 2);
   // fields
   for (let i = 0; i < 6; i++) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(34, 244 + i * 14, 96, 8); ctx.fillStyle = '#4a9a3a'; for (let j = 0; j < 12; j++) ctx.fillRect(38 + j * 8, 242 + i * 14, 3, 5); }
@@ -1562,7 +1615,7 @@ function drawVillage() {
   const t = trainOf(), tg = vTarget();
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, CW, 196); ctx.clip(); ctx.translate(-camX, -camY);
-  if (area === 'village') { drawWorld(); if (vFish) drawBobber(); } else if (area === 'forest') drawForest(); else drawRoom();
+  if (area === 'village') { drawWorld(); if (vFish) drawBobber(); } else if (TOWNS[area]) { drawTown(); if (vFish) drawBobber(); } else if (area === 'forest') drawForest(); else drawRoom();
   if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const q = tg === 'elder' ? { x: V_ELDER.x, y: V_ELDER.y - 40 } : (p => ({ x: p.x, y: p.y - 38 }))(curPeople()[vNearPerson()]); textS('!', Math.round(q.x) - 2, Math.round(q.y), '#ffe060', 2); }
   ctx.restore();
   { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, CW, 196); } }
@@ -1571,6 +1624,7 @@ function drawVillage() {
   textS(hero.name, 6, 3, '#80c8ff', 1); textS('DAY ' + t.day + ' ' + timeName(t), 66, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
   const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, 252, 3, '#ffb060', 1);
+  textS(CW > 320 ? '[G] MAP' : 'MAP', CW > 320 ? CW - 48 : CW - 22, 3, '#80e0ff', 1); if (CW > 320) textS(placeName(), CW - 48 - textW(placeName()) - 10, 3, '#c8f0ff', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'OK' : 'Z';
@@ -1582,7 +1636,7 @@ function drawVillage() {
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', q2Of().step === 1 ? 'HE WANTS A GOLD FISH.' : 'MEALS, OR GRILL A FISH FREE.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, p.role === 'boy' && questOf().step >= 4 ? 'FRIEND. BOND ' + bondOf().boy + '/5' : '']) : ['', ''];
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], person: pinfo }[tg];
+    const info = (tg.slice(0, 2) === 't:') ? townInfo(tg) : { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
@@ -1640,6 +1694,7 @@ function toForest(x, y, line) {
 }
 function fightBandits() { stopSpeech(); newGame({ foe: 'bandit', line: 'GET LOST, KID, OR ELSE!' }); }
 function foeAfter(win) { // called from the fight-over screen after a non-Roku fight
+  if (foe.id === 'master' || foe.id === 'rival') { duelAfter(win); return; }
   if (foe.id === 'boar') {
     const last = state.log[state.log.length - 1], fled = last && last.notes.includes('fled'), t = trainOf(); let line;
     if (win && !fled) { if (t.inv.length < BAG_MAX) { t.inv.push('meat'); line = 'YOU GOT BOAR MEAT! (BAG ' + t.inv.length + '/' + BAG_MAX + ')'; } else line = 'YOU WORE IT OUT, BUT YOUR BAG IS FULL.'; }
@@ -1720,7 +1775,7 @@ function fishStart() {
 }
 function fishPick(t) { // rarer fish need luck; a golden fish is guaranteed after 8 casts without one
   if (t.pity >= 8) return 'gold';
-  const r = Math.random(); return r < .05 ? 'gold' : r < .22 ? 'big' : r < .55 ? 'medium' : 'small';
+  const r = Math.random(), deep = TOWNS[area] && TOWNS[area].deep; return r < (deep ? .08 : .05) ? 'gold' : r < (deep ? .38 : .22) ? 'big' : r < (deep ? .75 : .55) ? 'medium' : 'small';
 }
 function fishUpdate(dt) {
   const f = vFish; if (!f) return; const t = trainOf(); f.t += dt;
@@ -1755,7 +1810,7 @@ function fishPress(k) {
   return true;
 }
 function drawBobber() {
-  const f = vFish, bx = 450, by = 300 + (f.phase === 'bite' ? 6 : 0) + Math.sin(time * 4) * (f.phase === 'wait' ? 1.5 : 3);
+  const f = vFish, bx = fishSpot().wx, by = fishSpot().wy + (f.phase === 'bite' ? 6 : 0) + Math.sin(time * 4) * (f.phase === 'wait' ? 1.5 : 3);
   ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(vx + 6), Math.round(vy - 18)); ctx.quadraticCurveTo(Math.round((vx + bx) / 2), Math.round(vy - 40), bx, Math.round(by)); ctx.stroke();
   ctx.fillStyle = '#e04040'; ctx.fillRect(bx - 2, Math.round(by) - 3, 4, 4); ctx.fillStyle = '#ffffff'; ctx.fillRect(bx - 2, Math.round(by) - 5, 4, 2);
   if (f.phase === 'bite') { ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(bx, Math.round(by) + 2, 6 + (f.t * 30) % 10, 0, 6.28); ctx.stroke(); textS('!', bx - 2, Math.round(by) - 26, '#ffe060', 2); }
@@ -1777,7 +1832,7 @@ function drawFishUi() {
   textS(f.phase === 'wait' ? key + ' TOO EARLY SCARES IT. X: STOP' : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
 }
 function fishItems() { return trainOf().inv.map((k, i) => ({ fish: k, idx: i, n: FISH[k].n, short: '+' + FISH[k].hp + ' HP  STR ' + (FISH[k].str > 0 ? '+' : '') + FISH[k].str })); }
-function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); return MEALS.concat(q2Of().step >= 2 ? [GOLDEN] : []).concat(fishItems()); }
+function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
 // ================= mission 2 (the cook's golden ramen) + the boy as your first friend =================
 const GOLDEN = { n: 'GOLDEN RAMEN', turns: 1, hp: 20, str: -25, d: '+20 HP FIGHT, STRAIN -25', short: '+20 HP  STR -25' };
 const BOY_TALK = ['BOY: I AM STILL SCARED OF THE FOREST. BUT YOU WERE BRAVE.', 'BOY: MY SISTER SAYS I TALK TOO MUCH.', 'BOY: I WANT TO LEARN A KI BLAST. CAN YOU SHOW ME?', 'BOY: WHEN I FEEL SCARED, I THINK OF YOU.', 'BOY: ONE DAY WE WILL TRAIN TOGETHER AGAINST ROKU!', 'BOY: YOU ARE MY BEST FRIEND!'];
@@ -1813,6 +1868,235 @@ function friendPick(m) {
   vTalk = 'YOU SPARRED WITH THE BOY. ' + (low ? low.toUpperCase() + ' +1. ' : 'ALL STATS AT THE CAP. ') + 'STRAIN +6. (BOND ' + b.boy + '/5)' + extra; say(vTalk);
 }
 function vPick(m) { if (vMenu && vMenu.kind === 'friend') friendPick(m); else vEat(m); }
+// ================= the big world: six places, six roads, a world map =================
+// Map (from the plan): Sorya Village - Tavora - Keshin - Oraya City, and Sorya - Mirakai - Lumora - Oraya City.
+const GATE_INTO = { keshin: 2, lumora: 2, oraya: 3 }; // milestones needed to walk into a place
+const meal = (n, turns, hp, str) => ({ n, turns, hp, str, d: (hp ? '+' + hp + ' HP FIGHT, ' : '') + 'STRAIN ' + (str > 0 ? '+' : '') + str, short: (hp ? '+' + hp + ' HP  ' : '') + 'STR ' + (str > 0 ? '+' : '') + str });
+const PL = (name, body, hair, zone, lines, extra) => Object.assign({ name, body, hair, zone, lines }, extra || {});
+const STREETS = [[92, 114], [202, 224]];
+const TOWNS = {
+  tavora: { name: 'TAVORA', kind: 'town', w: 560, h: 300, ground: '#5a8a3a', path: '#d0b878', sky: ['#4a6aa8', '#8ab0d8'], deco: 'farm', trees: '#3a8a3a', start: [40, 102],
+    b: [['INN', 0, 0, '#3a8a5a', '#d8c898', 'inn'], ['BAKERY', 1, 0, '#d08a30', '#ecd8a8', 'food'], ['FARM HOUSE', 2, 0, '#8a5a3a', '#d8c0a0', 'hut', { title: 'FARM HOUSE', npc: { name: 'FARMER WIFE', body: '#e0a0c0', hair: '#804020', lines: ['MY HUSBAND WORKS FROM DAWN. HE NEEDS MORE THAN BREAD!', 'A HEALTHY BODY STARTS WITH A FULL BELLY.'] } }],
+      ['MARKET', 3, 0, '#a04060', '#e0d0b0', 'hut', { title: 'MARKET', npc: { name: 'TRADER', body: '#4060a0', hair: '#c0c0c0', lines: ['I TRADE WITH EVERY TOWN ON YARDRAT. KESHIN HAS A HALL WITH 20X GRAVITY!', 'THE ROAD SOUTH-EAST IS ROUGH. SHARE YOUR FOOD WITH TRAVELLERS.'] } }],
+      ['HOUSE', 4, 0, '#6a6a8a', '#d0c8b0', 'hut', { title: 'ELDER HOUSE', npc: { name: 'OLD ELDER', body: '#805090', hair: '#f0f0f0', lines: ['TAVORA FEEDS HALF OF YARDRAT.', 'ROKU WAS ONCE A STUDENT HERE. HE NEVER SAYS SO.'] } }],
+      ['BARN', 0, 1, '#8a3a2a', '#c09070', 'hut', { title: 'BARN', npc: { name: 'FARMHAND', body: '#a08040', hair: '#402010', lines: ['THE BEST TRAINING IS LIFTING HAY. NO GRAVITY NEEDED.', 'A BIG FISH FROM MIRAKAI MAKES A GREAT STEW.'] } }],
+      ['HOUSE', 1, 1, '#4a7a9a', '#d8d0b8', 'hut', { title: 'HOUSE', npc: { name: 'MOTHER', body: '#c06080', hair: '#503020', lines: ['MY DAUGHTER WANTS TO BE A FIGHTER. LIKE YOU.', 'EAT WELL, TRAVELLER!'] } }]],
+    people: [PL('FARMER', '#a07040', '#c0c0c0', 'r1', ['THE HARVEST IS GOOD THIS YEAR!', 'YOU CAME FROM SORYA? ROKU SENT YOU?']), PL('KID', '#40a060', '#202020', 'r0', ['I WANT A HONEY BUN!', 'ARE YOU A FIGHTER? SHOW ME A KI BLAST!'], { small: true }), PL('DOG', '#d8b080', '#d8b080', 'r1', ['WOOF!', 'WOOF WOOF!'], { dog: true }), PL('TRAVELER', '#607080', '#804020', 'r0', ['I AM GOING TO KESHIN. THE ROCKS THERE ARE HEAVY.', 'THE ROAD IS SAFE IF YOU ARE STRONG.'])],
+    signs: [{ x: 30, y: 112, text: 'TAVORA. FARM TOWN. THE BEST BREAD ON YARDRAT.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO KESHIN. YOU NEED 2 MILESTONES.' }],
+    meals: [meal('HONEY BUN', 1, 10, -10), meal('FARM STEW', 1, 20, 5), meal('HARVEST FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'r2' }] },
+  keshin: { name: 'KESHIN', kind: 'town', w: 560, h: 300, ground: '#7a7a72', path: '#a89870', sky: ['#4a4a6a', '#8a7a8a'], deco: 'rocks', trees: '#5a6a4a', start: [40, 102],
+    b: [['INN', 0, 0, '#6a6a7a', '#c8c0a8', 'inn'], ["MINERS' MESS", 1, 0, '#a05a30', '#d8c8a8', 'food'], ['GRAVITY HALL', 2, 0, '#404050', '#a0a0b0', 'gym'], ['FORGE', 3, 0, '#802a2a', '#b8a898', 'hut', { title: 'FORGE', npc: { name: 'SMITH', body: '#a04030', hair: '#202020', lines: ['I FORGE WEIGHTS FOR THE HALL. 20X GRAVITY HURTS!', 'STRAIN IS THE PRICE OF POWER. PAY IT SLOWLY.'] } }],
+      ['FOREMAN', 4, 0, '#8a6a3a', '#d0c0a0', 'hut', { title: 'FOREMAN HOUSE', npc: { name: 'FOREMAN', body: '#c08030', hair: '#403020', lines: ['THE QUARRY NEVER SLEEPS.', 'ORAYA CITY BUYS ALL OUR STONE. THEY HAVE A GRAND ARENA.'] } }],
+      ['HOUSE', 0, 1, '#5a5a6a', '#c8c0b0', 'hut', { title: 'MINER HOUSE', npc: { name: 'MINER', body: '#707890', hair: '#101010', lines: ['THE ROCKS HERE ARE HEAVY. SO IS THE HALL.', 'DO NOT USE 20X GRAVITY WHEN YOU ARE TIRED!'] } }]],
+    people: [PL('MINER', '#707890', '#101010', 'r0', ['THE ROCKS HERE ARE HEAVY.', 'TRAIN IN THE HALL. THEN TRY THE ROAD.']), PL('GUARD', '#a04030', '#303030', 'r1', ['THE ROAD TO ORAYA CITY NEEDS 3 MILESTONES.', 'STRONG FIGHTERS GATHER IN THE CITY.'])],
+    signs: [{ x: 30, y: 112, text: 'KESHIN. QUARRY TOWN. HOME OF THE GRAVITY HALL.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
+    meals: [meal('ROCK BREAD', 1, 14, -5), meal('MINER STEW', 1, 24, 12), meal('MOUNTAIN FEAST', 2, 34, 24)], exits: [{ side: 'w', row: 0, to: 'r2' }, { side: 'e', row: 0, to: 'r3' }] },
+  mirakai: { name: 'MIRAKAI', kind: 'town', w: 560, h: 330, ground: '#6a9a6a', path: '#d8c898', sky: ['#4a80b8', '#9ad0e8'], deco: 'sea', trees: '#3a9a5a', start: [40, 102], deep: true,
+    water: [0, 250, 560, 330], dock: { x: 300, y: 262, wx: 300, wy: 292 },
+    b: [['INN', 0, 0, '#3a7a9a', '#d8d0b0', 'inn'], ['FISH GRILL', 1, 0, '#c07a30', '#e8d8b0', 'food'], ['NET HOUSE', 2, 0, '#4a8a7a', '#d0d0b8', 'hut', { title: 'NET HOUSE', npc: { name: 'FISHERMAN', body: '#4080c0', hair: '#402010', lines: ['THE DEEP WATER OFF THE DOCK HOLDS THE BIG ONES.', 'A GOLD FISH BRINGS LUCK. I SAW ONE ONCE.'] } }],
+      ['BOAT SHOP', 3, 0, '#8a5a3a', '#d8c8a0', 'hut', { title: 'BOAT SHOP', npc: { name: 'BOATWRIGHT', body: '#a08050', hair: '#805020', lines: ['ONE DAY I WILL BUILD A BOAT TO LEAVE YARDRAT.', 'THE SEA ROAD TO LUMORA IS QUIET.'] } }],
+      ['HOUSE', 4, 0, '#6a7a9a', '#d8d0b8', 'hut', { title: 'HOUSE', npc: { name: 'SAILOR', body: '#3060a0', hair: '#e0e0e0', lines: ['THE LAKE IS DEEP. THE FISH ARE STRONG.', 'FOCUS! THE FISH WAITS FOR A CALM MIND.'] } }]],
+    people: [PL('FISHER', '#4080c0', '#402010', 'r1', ['FISH HERE ARE BIGGER THAN IN SORYA.', 'SHH! I AM WAITING FOR A BIG ONE.']), PL('GIRL', '#e06080', '#f0c040', 'r0', ['THE SEA IS SO BIG!', 'DO YOU LIKE FISH?']), PL('DOG', '#c8a080', '#c8a080', 'r0', ['WOOF!'], { dog: true })],
+    signs: [{ x: 30, y: 112, text: 'MIRAKAI. LAKE TOWN. FISH FROM THE DEEP DOCK ARE BIGGER.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO LUMORA. YOU NEED 2 MILESTONES.' }],
+    meals: [meal('FISH SKEWER', 1, 12, -8), meal('SEAFOOD POT', 1, 22, 8), meal('SEA FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r4' }, { side: 'e', row: 0, to: 'r5' }] },
+  lumora: { name: 'LUMORA', kind: 'town', w: 560, h: 300, ground: '#5a5a9a', path: '#b8a8d8', sky: ['#3a2a6a', '#8a6ab0'], deco: 'temple', trees: '#4a4a8a', start: [40, 102],
+    b: [['INN', 0, 0, '#4a3a8a', '#d0c8e8', 'inn'], ['TEA HOUSE', 1, 0, '#8a5a9a', '#e8d8f0', 'food'], ['MEDITATION', 2, 0, '#3a6a8a', '#d0e0f0', 'meditate'], ['SPIRIT TEMPLE', 3, 0, '#5a2a8a', '#e8e0f8', 'master'],
+      ['LIBRARY', 4, 0, '#6a4a7a', '#e0d8e8', 'hut', { title: 'LIBRARY', npc: { name: 'SCHOLAR', body: '#6060a0', hair: '#d0d0d0', lines: ['SPIRIT SENSE SHOWS THE FUTURE. BUT ONLY IF YOUR MIND IS STILL.', 'THE MASTER TEACHES A TECHNIQUE THAT LETS YOU CARRY MORE POWER.'] } }],
+      ['HOUSE', 0, 1, '#5a5a9a', '#d8d0e8', 'hut', { title: 'MONK HOUSE', npc: { name: 'MONK', body: '#c08040', hair: '#101010', lines: ['BREATHE IN. BREATHE OUT.', 'THE TEMPLE MASTER NEVER RUSHES. HE WAITS. AND HE LIES TO YOUR SENSE.'] } }]],
+    people: [PL('MONK', '#c08040', '#101010', 'r0', ['BREATHE IN. BREATHE OUT.', 'STRAIN IS LEARNED BY LISTENING TO YOUR BODY.']), PL('CHILD', '#8060c0', '#202020', 'r1', ['THE LIGHTS ARE SPIRITS!', 'THE MASTER IS SCARY BUT KIND.'], { small: true })],
+    signs: [{ x: 30, y: 112, text: 'LUMORA. THE SPIRIT TOWN. SPEAK SOFTLY.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
+    meals: [meal('TEMPLE TEA', 1, 0, -25), meal('LOTUS SOUP', 1, 12, -15), meal('SPIRIT FEAST', 2, 30, 10)], exits: [{ side: 'w', row: 0, to: 'r5' }, { side: 'e', row: 0, to: 'r6' }] },
+  oraya: { name: 'ORAYA CITY', kind: 'town', w: 700, h: 320, ground: '#8a8a94', path: '#b8b8c0', sky: ['#5a6a9a', '#a8b8d8'], deco: 'city', trees: '#4a8a5a', start: [40, 102],
+    b: [['INN', 0, 0, '#3a5a9a', '#d8d8e0', 'inn'], ['CITY DINER', 1, 0, '#c07a30', '#ecdcc0', 'food'], ['GRAND ARENA', 2, 0, '#a02a2a', '#d8c8b0', 'rival'], ['MUSEUM', 3, 0, '#5a5a7a', '#e0e0e8', 'hut', { title: 'MUSEUM', npc: { name: 'CURATOR', body: '#604080', hair: '#c0c0c0', lines: ['THIS SPEAR BELONGED TO THE FIRST YARDRAT WARRIOR.', 'THE MASTER OF LUMORA AND THE CHAMPION OF ORAYA ONCE TRAINED TOGETHER.'] } }],
+      ['GUILD', 4, 0, '#2a5a8a', '#d0d8e0', 'hut', { title: 'FIGHTERS GUILD', npc: { name: 'GUILD CLERK', body: '#2060a0', hair: '#303030', lines: ['THE RIVAL FIGHTS EVERY CHALLENGER IN THE GRAND ARENA.', 'HE IS PROUD AND ANGRY. HE GETS STRONGER WHEN HE IS HURT.'] } }],
+      ['TOWER', 5, 0, '#6a2a5a', '#d8c8d8', 'hut', { title: 'TOWER', npc: { name: 'ASTRONOMER', body: '#4a3a8a', hair: '#f0f0f0', lines: ['THE STARS OVER YARDRAT ARE CHANGING.', 'SOMETHING IS COMING. I CAN SEE IT IN THE SKY.'] } }],
+      ['MARKET', 0, 1, '#a04060', '#e0d0b8', 'hut', { title: 'CITY MARKET', npc: { name: 'MERCHANT', body: '#c08030', hair: '#403020', lines: ['GOODS FROM EVERY TOWN! FISH FROM MIRAKAI, BREAD FROM TAVORA!', 'A FIGHTER EATS WELL BEFORE THE ARENA.'] } }],
+      ['HOUSE', 1, 1, '#5a7a9a', '#d8d8e0', 'hut', { title: 'CITY HOUSE', npc: { name: 'CITIZEN', body: '#607090', hair: '#503020', lines: ['THE ARENA IS LOUD ON TOURNAMENT DAY.', 'I BET ON THE RIVAL. HE NEVER GIVES UP!'] } }]],
+    people: [PL('CITIZEN', '#607090', '#503020', 'r0', ['WELCOME TO ORAYA CITY!', 'THE ARENA IS THE HEART OF THE CITY.']), PL('GUARD', '#a04030', '#303030', 'r1', ['NO TROUBLE IN THE CITY.', 'THE RIVAL WAITS IN THE GRAND ARENA.']), PL('KID', '#40a060', '#202020', 'r0', ['I WANT TO BE THE CHAMPION!', 'THE RIVAL IS SO COOL!'], { small: true }), PL('DOG', '#c8a080', '#c8a080', 'r1', ['WOOF!'], { dog: true }), PL('MERCHANT', '#c08030', '#403020', 'r1', ['BUY LOW, SELL HIGH! (I HAVE NOTHING TO SELL YET.)', 'MONEY COMES LATER. FOOD COMES FIRST.'])],
+    signs: [{ x: 30, y: 112, text: 'ORAYA CITY. THE CAPITAL OF YARDRAT.' }],
+    meals: [meal('CITY NOODLES', 1, 15, -5), meal('ROYAL STEAK', 1, 26, 10), meal('TOURNAMENT FEAST', 2, 36, 26)], exits: [{ side: 'w', row: 0, to: 'r3' }, { side: 'w', row: 1, to: 'r6' }] }
+};
+// roads: a long trail with two travellers. west/east = the places at each end.
+const ROUTE_DEF = { r1: ['EAST ROAD', 'forest', 'tavora', '#3a7a3a', '#8a7a52', 1], r2: ['FARM ROAD', 'tavora', 'keshin', '#6a9a3a', '#b8a070', 2], r3: ['STONE ROAD', 'keshin', 'oraya', '#7a7a70', '#a89880', 3],
+  r4: ['SOUTH ROAD', 'village', 'mirakai', '#4a8a5a', '#c8b888', 4], r5: ['LAKE ROAD', 'mirakai', 'lumora', '#5a6a9a', '#b0a8c8', 5], r6: ['SPIRIT ROAD', 'lumora', 'oraya', '#5a4a8a', '#b8a8d0', 6] };
+const ROUTE_TALK = { r1: [['WANDERER', '#607080', 'THE FOREST HIDES BANDITS. YOU DEALT WITH THEM? GOOD.'], ['CART DRIVER', '#a08040', 'TAVORA IS JUST AHEAD. BREAD AND STEW!']], r2: [['FARMHAND', '#a08040', 'KESHIN IS BEHIND THE HILLS. BRING FOOD.'], ['PILGRIM', '#8060a0', 'I WALK TO LUMORA. THEY SAY THE MASTER TEACHES ANYONE WHO CAN LISTEN.']],
+  r3: [['MINER', '#707890', 'THE CITY BUYS OUR STONE. THE ARENA IS BUILT OF IT!'], ['SOLDIER', '#a04030', 'ONLY STRONG FIGHTERS ENTER ORAYA CITY.']], r4: [['FISHERMAN', '#4080c0', 'MIRAKAI HAS A DEEP DOCK. BRING A STRONG BODY.'], ['CHILD', '#40a060', 'THE LAKE IS SO BIG!']],
+  r5: [['MONK', '#c08040', 'THE TEMPLE HAS A MASTER WHO CANNOT BE HURRIED.'], ['TRAVELLER', '#607080', 'THE LIGHTS OF LUMORA ARE SPIRITS.']], r6: [['GUARD', '#a04030', 'THE CITY IS CLOSE. THE ARENA CHAMPION IS PROUD.'], ['SCHOLAR', '#6060a0', 'SOMETHING STIRS ON YARDRAT. I FEEL IT.']] };
+Object.keys(ROUTE_DEF).forEach(k => {
+  const d = ROUTE_DEF[k];
+  TOWNS[k] = { name: d[0], kind: 'route', w: 560, h: 200, ground: d[3], path: d[4], sky: ['#3a3a6a', '#7a6a9a'], deco: 'route', trees: '#2f6a3a', minY: 60, streets: [[92, 116]], start: [30, 104], seed: d[5] * 17,
+    b: [], exits: [{ side: 'w', row: 0, to: d[1] }, { side: 'e', row: 0, to: d[2] }],
+    people: ROUTE_TALK[k].map((tk, i) => PL(tk[0], tk[1], '#402010', 'r0', [tk[2], 'THE ROAD IS LONG. WALK WELL.'])),
+    signs: [{ x: 22, y: 126, text: 'WEST: ' + (d[1] === 'village' ? 'SORYA VILLAGE' : d[1] === 'forest' ? 'THE FOREST' : TOWNS[d[1]] ? TOWNS[d[1]].name : d[1].toUpperCase()) + '.' }, { x: 538, y: 126, text: 'EAST: ' + (d[2] === 'village' ? 'SORYA VILLAGE' : d[2].toUpperCase()) + '.' }] };
+});
+// build layout: buildings, streets, walking zones, trees
+Object.keys(TOWNS).forEach(k => {
+  const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
+  T.bl = T.b.map(sp => { const x0 = 30 + sp[1] * 104, y0 = sp[2] ? 150 : 40; return { label: sp[0], roof: sp[3], wall: sp[4], role: sp[5], extra: sp[6] || {}, x0, y0, x1: x0 + 64, y1: y0 + 46, dx: x0 + 32 }; });
+  T.pp = T.people.map((p, i) => { const s = p.zone === 'r1' && T.streets[1] ? T.streets[1] : T.streets[0]; p.zone = [40, s[0] + 4, T.w - 40, s[1] - 2]; p.x = 60 + ((i * 131) % (T.w - 120)); p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .6; p.face = 1; p.step = 0; p.line = 0; return p; });
+  T.trees = []; const seed = T.seed || (k.length * 7);
+  const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
+  const n = T.kind === 'route' ? 90 : 40;
+  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? (y > 84 && y < 130) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+});
+let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village';
+const southOpen = () => !!(saveData && saveData.wins > 0);
+function placeName() { return area === 'village' ? 'SORYA VILLAGE' : area === 'forest' ? 'THE FOREST' : TOWNS[area] ? TOWNS[area].name : ''; }
+function markVisited(key) { trainOf(); const v = saveData.visited || (saveData.visited = { village: 1 }); v[key] = 1; trSave(); }
+function townPeople() { return TOWNS[area].pp; }
+function townTarget() {
+  const T = TOWNS[area];
+  for (let i = 0; i < T.bl.length; i++) { const b = T.bl[i]; if (vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22) return 't:' + i; }
+  if (T.dock && Math.hypot(vx - T.dock.x, vy - T.dock.y) < 26) return 'fish';
+  const si = (T.signs || []).findIndex(s => Math.hypot(vx - s.x, vy - s.y) < 22); if (si >= 0) return 't:s' + si;
+  return vNearPerson() >= 0 ? 'person' : null;
+}
+function townSolid(x, y) {
+  const T = TOWNS[area];
+  if (T.water) { const w = T.water; if (x > 280 && x < 320 && y > w[1] && y < w[1] + 60 && T.dock) return false; if (y > w[1] + 6 && y < w[3]) return true; }
+  if (T.bl.some(b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1)) return true;
+  if (T.deco === 'city' && x > T.w / 2 - 22 && x < T.w / 2 + 22 && y > 120 && y < 146) return true;
+  return T.trees.some(t => Math.hypot(x - t.x, y - t.y) < 8);
+}
+function townInfo(tg) {
+  const T = TOWNS[area];
+  if (tg[2] === 's') return ['READ THE SIGN', ''];
+  const b = T.bl[+tg.slice(2)], t = trainOf();
+  return ({ inn: ['THE INN', 'STRAIN -40. COSTS TIME.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
+}
+function restNow() {
+  const t = trainOf();
+  if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; }
+  else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
+  else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU RESTED AT THE INN. STRAIN -40.'; say(vMsg); }
+}
+function meditateNow() {
+  const t = trainOf();
+  if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return; }
+  t.sessions--; t.fatigue = Math.max(0, t.fatigue - 15); const cap = statCap(), gain = t.focus < cap;
+  if (gain) t.focus++; trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU MEDITATED. ' + (gain ? 'FOCUS +1. ' : 'FOCUS IS AT ITS CAP. ') + 'STRAIN -15.'; say(vMsg);
+}
+function enterHut(b) {
+  ROOM_PEOPLE.hut = [Object.assign({ x: 120, y: 82, face: 1, step: 0, line: 0 }, b.extra.npc)]; hutTitle = b.extra.title || b.label;
+  hutReturn = { area, x: b.dx, y: b.y1 + 12 }; enterRoom('hut');
+}
+function duelStart(who) {
+  const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); vMsg = who === 'master' ? 'THE MASTER SLEEPS. COME BACK TOMORROW.' : 'THE ARENA IS CLOSED AT NIGHT.'; return; }
+  t.sessions = Math.max(0, t.sessions - 1); trSave(); foeReturn = { area, x: vx, y: vy };
+  vTalk = who === 'master' ? 'MASTER: SIT. BREATHE. NOW SHOW ME YOUR SPIRIT. (DUEL: COSTS TIME)' : 'RIVAL: ANOTHER CHALLENGER? I WILL CRUSH YOU! (DUEL: COSTS TIME)'; say(vTalk); sfx('warn');
+  vAfterTalk = () => { stopSpeech(); newGame({ foe: who, line: who === 'master' ? 'BEGIN. AND DO NOT LIE TO YOURSELF.' : 'COME AT ME WITH EVERYTHING!' }); };
+}
+function toPlace(a, x, y, line) {
+  stopSpeech(); trainOf(); mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; vAfterTalk = null; vFade = 1; vFlash = 0; vFace = 1;
+  P.set = makeHeroSet(hero); vMsg = line || ''; if (line) say(line);
+}
+function duelAfter(win) {
+  saveData.tech = saveData.tech || []; let line;
+  if (foe.id === 'master') {
+    if (win) { if (saveData.tech.indexOf('steady') < 0) { saveData.tech.push('steady'); saveData.miles = (saveData.miles | 0) + 1; line = 'MASTER: WELL DONE. SPIRIT LANCE STRAINS YOU LESS. (TECHNIQUE, CAP +2)'; } else line = 'MASTER: YOUR MIND IS CLEAR. GOOD.'; }
+    else line = 'MASTER: CALM YOUR MIND. COME BACK.';
+  } else if (win) { if (!saveData.rivalDone) { saveData.rivalDone = 1; saveData.miles = (saveData.miles | 0) + 1; line = 'RIVAL: HMPH... YOU ARE STRONG. WE MEET AGAIN. (CAP +2)'; } else line = 'RIVAL: YOU WIN AGAIN?! I WILL TRAIN HARDER!'; }
+  else line = 'RIVAL: HA! COME BACK WHEN YOU ARE STRONGER!';
+  trSave(); const r = foeReturn || { area: 'village', x: 140, y: 178 }; toPlace(r.area, r.x, r.y, line);
+}
+function townAct(tg) {
+  const T = TOWNS[area], t = trainOf();
+  if (tg[2] === 's') { const s = T.signs[+tg.slice(3)]; sfx('ok'); vTalk = s.text; say(vTalk); return; }
+  const b = T.bl[+tg.slice(2)];
+  if (b.role === 'inn') restNow();
+  else if (b.role === 'food') { sfx('ok'); openFoodMenu(); }
+  else if (b.role === 'hut') enterHut(b);
+  else if (b.role === 'gym') { sfx('ok'); trainHall = true; toTrain('KESHIN HALL: GRAVITY UP TO 20X. WATCH YOUR STRAIN.'); }
+  else if (b.role === 'meditate') meditateNow();
+  else if (b.role === 'master') duelStart('master');
+  else if (b.role === 'rival') duelStart('rival');
+}
+function fishSpot() { if (TOWNS[area] && TOWNS[area].dock) return TOWNS[area].dock; return { x: DOCK.x, y: DOCK.y, wx: 450, wy: 300 }; }
+function areaLabel(k) { return k === 'village' ? 'SORYA VILLAGE' : k === 'forest' ? 'THE FOREST' : TOWNS[k] ? TOWNS[k].name : k; }
+function enterArea(to, from, fromExit) {
+  const need = GATE_INTO[to];
+  if (need && milestones() < need) { // the road is too dangerous: step back and say why
+    if (fromExit) vx = fromExit.side === 'e' ? TOWNS[from].w - 34 : 34; vTalk = 'THE ROAD AHEAD IS TOO DANGEROUS. YOU NEED ' + need + ' MILESTONES. (YOU HAVE ' + milestones() + ')'; say(vTalk); sfx('bad'); return;
+  }
+  if (to === 'forest') { area = 'forest'; vx = FOREST.w - 30; vy = 206; }
+  else if (to === 'village') { area = 'village'; vx = 160; vy = 384; }
+  else {
+    const T = TOWNS[to], ex = T.exits.find(e => e.to === from), st = T.streets[ex ? ex.row : 0], my = Math.round((st[0] + st[1]) / 2);
+    area = to; vx = ex && ex.side === 'e' ? T.w - 30 : 30; vy = my; if (T.kind === 'town') markVisited(to);
+  }
+  vFade = 1; vWalk = 0; vMsg = 'YOU ARRIVE: ' + areaLabel(to) + '.'; sfx('ok'); vTalk = '';
+}
+function townExits() {
+  const T = TOWNS[area];
+  T.exits.forEach(e => { const st = T.streets[e.row]; if (vy < st[0] - 8 || vy > st[1] + 8) return; if ((e.side === 'w' && vx <= 5) || (e.side === 'e' && vx >= T.w - 6)) enterArea(e.to, area, e); });
+}
+function fastTravel(key) {
+  const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); return 'IT IS NIGHT. NO TIME TO TRAVEL.'; }
+  t.sessions--; markVisited(key); trSave(); mode = 'village';
+  if (key === 'village') toPlace('village', 140, 178, 'YOU TRAVEL BACK TO SORYA VILLAGE.'); else { const T = TOWNS[key]; toPlace(key, T.start[0], T.start[1], 'YOU TRAVEL TO ' + T.name + '.'); }
+  return '';
+}
+// ---------- the world map ----------
+const MAP_NODES = { village: { n: 'SORYA VILLAGE', x: 58, y: 44 }, tavora: { n: 'TAVORA', x: 58, y: 94 }, keshin: { n: 'KESHIN', x: 58, y: 144 }, mirakai: { n: 'MIRAKAI', x: 196, y: 44 }, lumora: { n: 'LUMORA', x: 196, y: 94 }, oraya: { n: 'ORAYA CITY', x: 130, y: 178 } };
+const MAP_EDGES = [['village', 'tavora'], ['tavora', 'keshin'], ['keshin', 'oraya'], ['village', 'mirakai'], ['mirakai', 'lumora'], ['lumora', 'oraya']];
+function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
+function mapVisited() { trainOf(); return Object.assign({ village: 1 }, saveData.visited || {}); }
+function toggleMap() {
+  if (mode === 'map') { mode = 'village'; sfx('move'); return; }
+  if (mode === 'village' && !vFish && !vTalk && !vMenu && !ROOMS[area]) { mode = 'map'; mapSel = mapCurrent(); mapMsg = ''; sfx('ok'); }
+}
+let mapMsg = '';
+function mapPress(k) {
+  const vis = mapVisited(), list = Object.keys(MAP_NODES).filter(n => vis[n]);
+  if (k === 'back') { mode = 'village'; sfx('move'); return true; }
+  if (k === 'left' || k === 'up') { mapSel = list[(list.indexOf(mapSel) + list.length - 1) % list.length]; sfx('move'); }
+  else if (k === 'right' || k === 'down') { mapSel = list[(list.indexOf(mapSel) + 1) % list.length]; sfx('move'); }
+  else if (k === 'ok') {
+    if (mapSel === mapCurrent()) { sfx('bad'); mapMsg = 'YOU ARE ALREADY HERE.'; }
+    else { const r = fastTravel(mapSel); if (r) mapMsg = r; }
+  }
+  return true;
+}
+function drawMap() {
+  const vis = mapVisited(), cur = mapCurrent();
+  ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, CW, H); flatBg();
+  center('WORLD MAP', 8, '#ffd040', 2);
+  MAP_EDGES.forEach(e => { const a = MAP_NODES[e[0]], b = MAP_NODES[e[1]], known = vis[e[0]] && vis[e[1]] || vis[e[0]] || vis[e[1]]; ctx.strokeStyle = known ? '#8a7a52' : '#2a2a44'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(a.x + 34, a.y); ctx.lineTo(b.x + 34, b.y); ctx.stroke(); });
+  ctx.lineWidth = 1;
+  Object.keys(MAP_NODES).forEach(k => {
+    const n = MAP_NODES[k], seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]]));
+    if (!seen && !near) return;
+    const label = seen ? n.n : '???', w = Math.max(56, label.length * 6 + 12), x = n.x + 34 - w / 2, sel = k === mapSel;
+    ctx.fillStyle = seen ? '#1e1e48' : '#14142c'; ctx.fillRect(x, n.y - 9, w, 18);
+    ctx.fillStyle = sel ? '#ffe060' : seen ? '#60a0e0' : '#444466'; ctx.fillRect(x, n.y - 9, w, 2); ctx.fillRect(x, n.y + 7, w, 2); ctx.fillRect(x, n.y - 9, 2, 18); ctx.fillRect(x + w - 2, n.y - 9, 2, 18);
+    textS(label, Math.round(n.x + 34 - textW(label) / 2), n.y - 3, seen ? '#ffffff' : '#666688', 1);
+    if (k === cur && Math.floor(time * 3) % 2 === 0) textS('YOU', Math.round(n.x + 34 - 9), n.y - 20, '#80ff80', 1);
+  });
+  const t = trainOf(), sel = MAP_NODES[mapSel];
+  textS(sel ? sel.n : '', 10, 206, '#ffe060', 1);
+  textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : (touchMode ? 'OK' : 'Z') + ': TRAVEL (1 TIME SLOT)  ' + (t.sessions ? '' : 'NIGHT!')), 10, 217, mapMsg ? '#ff8080' : '#c8c8e8', 1);
+  textS('ARROWS  X: BACK', 10, 228, '#8888b0', 1);
+}
+// ---------- drawing a town or a road ----------
+function drawTown() {
+  const T = TOWNS[area], rr = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }, town = T.kind === 'town';
+  rr(0, 0, T.w, 34, T.sky[0]); rr(0, 22, T.w, 12, T.sky[1]);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < T.w; i += 90) ctx.fillRect(i, 26 - ((i / 90) % 3) * 3, 60, 10);
+  rr(0, 34, T.w, T.h - 34, T.ground); ctx.fillStyle = 'rgba(255,255,255,.07)'; for (let i = 0; i < 120; i++) ctx.fillRect((i * 53) % (T.w - 6), 40 + ((i * 37) % (T.h - 44)), 3, 2);
+  T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
+  T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
+  if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
+  if (T.deco === 'rocks') { ctx.fillStyle = '#5a5a58'; for (let i = 0; i < 9; i++) ctx.fillRect(20 + i * 62, T.h - 40 - (i % 3) * 12, 50, 40 + (i % 3) * 12); ctx.fillStyle = '#6a6a68'; for (let i = 0; i < 9; i++) ctx.fillRect(24 + i * 62, T.h - 40 - (i % 3) * 12, 20, 6); }
+  if (T.deco === 'sea' && T.water) { const w = T.water; rr(w[0], w[1], w[2] - w[0], w[3] - w[1], '#2a70b0'); rr(w[0], w[1] + 4, w[2] - w[0], w[3] - w[1] - 8, '#4a90d0'); ctx.fillStyle = '#9ad0f8'; for (let i = 0; i < 26; i++) { const u = (time * .5 + i * .31) % 1; ctx.fillRect((i * 47) % (T.w - 12), w[1] + 12 + (i * 13) % 60 + Math.sin(u * 6.28) * 2, 10, 2); } rr(290, w[1], 20, 62, '#a08850'); ctx.fillStyle = '#8a7040'; for (let y = w[1]; y < w[1] + 62; y += 6) ctx.fillRect(290, y, 20, 1); }
+  if (T.deco === 'temple') { for (let i = 0; i < 14; i++) { const u = (time * .2 + i * .17) % 1; ctx.fillStyle = 'rgba(200,180,255,' + (0.35 + 0.35 * Math.sin(u * 6.28)) + ')'; ctx.fillRect(30 + (i * 73) % (T.w - 60), 118 + Math.sin(time + i) * 8 + (i % 4) * 14, 3, 3); } }
+  if (T.deco === 'city') { for (let x = 0; x < T.w; x += 24) { ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(x, 92, 1, 22); ctx.fillRect(x, 202, 1, 22); } const fx = T.w / 2; rr(fx - 22, 126, 44, 18, '#8a9ab0'); rr(fx - 18, 122, 36, 10, '#5a8ad0'); rr(fx - 3, 108, 6, 18, '#a0b0c8'); ctx.fillStyle = 'rgba(200,230,255,.8)'; ctx.fillRect(fx - 1 + Math.sin(time * 4) * 2, 104 + (time * 20) % 6, 3, 3); }
+  T.bl.forEach(b => vBuilding(b, b.roof, b.wall, b.label));
+  const items = T.trees.filter(t => t.x > camX - 20 && t.x < camX + CW + 20).map(t => ({ y: t.y, draw: () => { vTree(t); if (T.trees && T.deco === 'temple') { ctx.fillStyle = 'rgba(160,140,255,.25)'; ctx.fillRect(t.x - 10, t.y - 30, 20, 20); } } }));
+  (T.signs || []).forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
+  drawPeopleAndPlayer(items);
+  if (T.kind === 'route') { ctx.fillStyle = 'rgba(10,30,20,.10)'; ctx.fillRect(camX, camY, CW, 196); }
+  if (T.deco === 'temple') { ctx.fillStyle = 'rgba(90,60,150,.12)'; ctx.fillRect(camX, camY, CW, 196); }
+}
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
   else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
@@ -1831,6 +2115,7 @@ function creatorTyping(e) { // the name box takes real keyboard letters
 function menuPress(k) {
   if (mode === 'train' || mode === 'tevent') return trainPress(k);
   if (mode === 'village') return villagePress(k);
+  if (mode === 'map') return mapPress(k);
   if (mode === 'title') {
     if (k === 'up') { titleIdx = (titleIdx + 3) % 4; sfx('move'); }
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
@@ -1939,6 +2224,7 @@ if (params.get('skipintro')) newGame({}); else toTitle();
 window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; },
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
+  get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; } };
 requestAnimationFrame(frame);
 })();
