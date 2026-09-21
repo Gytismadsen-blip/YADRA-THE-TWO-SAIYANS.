@@ -1355,10 +1355,10 @@ function trainPress(k) {
   const it = TR_ITEMS[trIdx];
   if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
   if (it === 'GRAVITY') { t.grav = (t.grav + 1) % (trainHall ? GRAV.length : 4); sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
-  if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return true; }
+  if (t.sessions <= 0) { sfx('bad'); trMsg = nightHint(); return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
-  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = it + ' IS MAXED (' + statCapOf(stat) + '). TRAIN THE OTHERS.'; return true; }
+  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = ['body', 'ki', 'focus'].every(k => t[k] >= STAT_MAX) ? 'ALL MAXED! GO FIGHT.' : it + ' IS MAXED. TRAIN ANOTHER.'; return true; }
   const gi = t.grav;
   if (gi >= 1 && gi < (trainHall ? GRAV.length : 4) - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
