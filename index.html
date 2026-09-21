@@ -1563,8 +1563,7 @@ function menuPress(k) {
       if (slotPurpose === 'continue') {
         if (!d) { sfx('bad'); return true; }
         sfx('ok'); hero = cleanHero(d.hero); curSlot = slotIdx; saveData = d; P.set = makeHeroSet(hero); stopSpeech();
-        if (d.fights > 0) toVillage('ROKU: BACK, ' + hero.name + '? TRAIN FIRST.');
-        else newGame({ line: 'BACK AGAIN, ' + hero.name + '? GOOD. I WANT A REAL FIGHT.' });
+        toVillage(d.fights > 0 ? 'ROKU: BACK, ' + hero.name + '? TRAIN FIRST.' : 'ROKU: TRAIN FIRST. I WAIT IN THE ARENA.');
       } else {
         if (d && !slotConfirm) { slotConfirm = true; sfx('warn'); return true; }
         sfx('ok'); curSlot = slotIdx; slotConfirm = false; cr = Object.assign({}, DEFAULT_HERO); crRow = 0; mode = 'creator';
