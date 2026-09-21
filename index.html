@@ -1067,7 +1067,7 @@ function drawToggles() {
     text(label, b.x + 4, b.y + 3, on ? '#80ff80' : '#8080a0', 1);
   });
 }
-let overTxt = '';
+let overTxt = '', capMsg = '';
 // Roku comments on HOW the fight went (HP left, collapses, length, strain, favourite move). Max 2 lines on screen (~44 chars).
 function overLine() {
   if (foe.id !== 'roku') return foe.name + ': ' + (over === 'win' ? 'OKAY! OKAY! I GIVE UP!' : 'HA! GO HOME, KID.');
@@ -1120,6 +1120,7 @@ function drawOver() {
   lines.forEach((l, i) => textS(l, 12, 170 + i * 16, '#ffffff', 2));
   textS(l2, 12, 170 + lines.length * 16 + 4, '#c8c8e8', 1);
   if (justSaved) textS('PROGRESS SAVED', 12, 219, '#80e0a0', 1);
+  if (capMsg) textS(capMsg, 130, 219, '#ffd040', 1);
   if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((foe.id !== 'roku' ? 'Z: CONTINUE   X: MENU' : saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
 }
 
@@ -1195,9 +1196,10 @@ function writeSlot(i, d) { try { localStorage.setItem(SAVE_KEY(i), JSON.stringif
 function anySave() { return [0, 1, 2].some(i => readSlot(i)); }
 function recordFight(win) { // progress is saved after every fight
   if (!saveData || curSlot < 0) return false;
+  capMsg = '';
   if (foe.id !== 'roku') { saveData.spar = (saveData.spar | 0) + 1; saveData.savedAt = Date.now(); return writeSlot(curSlot, saveData); } // side fights do not start a new day
   saveData.fights = (saveData.fights || 0) + 1;
-  if (win) { saveData.wins = (saveData.wins || 0) + 1; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
+  if (win) { saveData.wins = (saveData.wins || 0) + 1; if (saveData.wins === 1) capMsg = 'TRAINING CAP +2!'; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
   const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15); t.meal = 0; t.mom = false; t.day++;
   saveData.savedAt = Date.now();
@@ -1367,6 +1369,8 @@ function trainOf() {
   t.day = n(t.day, 1, 999, 1); t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
   return t;
 }
+function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
+function statCap() { return Math.min(STAT_MAX, 4 + 2 * milestones()); }
 const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left today: 3 = morning ... 0 = night
 function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
@@ -1374,11 +1378,11 @@ function toTrain(line) {
   stopSpeech(); trainOf(); mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
   P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
 }
-function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' IT IS NIGHT. GO FIGHT.'; }
+function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' IT IS NIGHT. SLEEP AT HOME.'; }
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
-  const before = t[stat]; t[stat] = Math.min(STAT_MAX, t[stat] + lv.gain); t.fatigue += lv.fat;
+  const before = t[stat]; t[stat] = Math.min(Math.max(statCap(), t[stat]), t[stat] + lv.gain); t.fatigue += lv.fat;
   const got = t[stat] - before;
   trAfter((got ? stat.toUpperCase() + ' +' + got : stat.toUpperCase() + ' IS FULL') + '.  STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
 }
@@ -1401,10 +1405,10 @@ function trainPress(k) {
   const it = TR_ITEMS[trIdx];
   if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
   if (it === 'GRAVITY') { t.grav = (t.grav + 1) % GRAV.length; sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
-  if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. NO TIME LEFT. GO FIGHT.'; return true; }
+  if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
-  if (t[stat] >= STAT_MAX) { sfx('bad'); trMsg = it + ' IS ALREADY FULL.'; return true; }
+  if (t[stat] >= statCap()) { sfx('bad'); trMsg = it + ' IS AT ITS CAP (' + statCap() + '). BEAT ROKU OR DO MISSIONS TO RAISE IT.'; return true; }
   const gi = t.grav;
   if (gi >= 1 && gi < GRAV.length - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
@@ -1419,7 +1423,7 @@ function drawTrain() {
   const hpN = 170 + C.CFG.train.hpPerBody * t.body, kiN = 100 + C.CFG.train.kiPerKi * t.ki, rdC = Math.round((1 - Math.max(0.4, 1 - C.CFG.train.readCutPerFocus * t.focus)) * 100);
   [['BODY', t.body, '#e0a040', 'HP ' + hpN], ['KI', t.ki, '#4090ff', 'KI ' + kiN], ['FOCUS', t.focus, '#60e0c0', 'READ -' + rdC + '%']].forEach((r, i) => {
     const y = 34 + i * 20;
-    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2]); textS('LV ' + r[1], 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
+    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2], { marks: [statCap()] }); textS('LV ' + r[1] + '/' + statCap(), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
   });
   const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
   textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
@@ -1438,7 +1442,7 @@ function drawTrain() {
   } else {
     TR_ITEMS.forEach((it, i) => {
       const c = i % 2, r = i >> 1, x = 14 + c * 152, y = 168 + r * 18, sel = i === trIdx;
-      const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= STAT_MAX;
+      const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= statCap();
       const off = (t.sessions <= 0 && it !== 'FIGHT' && it !== 'GRAVITY') || full;
       if (sel) textS('>', x - 4, y, '#ffe060', 2);
       textS(it === 'GRAVITY' ? 'GRAV ' + lv.g + 'X' : it, x + 10, y, off ? '#666680' : (sel ? '#ffe060' : '#ffffff'), 2);
@@ -1482,7 +1486,7 @@ const V_PEOPLE = [
   { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
   { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [110, 128, 172, 186], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
   { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
-const V_TIPS = ['ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
+const V_TIPS = ['SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
@@ -1497,6 +1501,7 @@ function exitRoom() { const b = area === 'home' ? V_HOME : V_RAMEN; area = 'vill
 function vNearPerson() { let best = -1, bd = 26; curPeople().forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
   if (area === 'forest') return forestTarget();
+  if (area === 'home' && vx > 6 && vx < 74 && vy > 76 && vy < 100 && vNearPerson() < 0) return 'bed';
   if (area !== 'village') return vNearPerson() >= 0 ? 'person' : null;
   const low = (b) => vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22;
   if (low(V_TRAIN)) return 'train'; if (low(V_RAMEN)) return 'ramen'; if (low(V_ARENA)) return 'arena'; if (low(V_REST)) return 'rest'; if (low(V_HOME)) return 'home';
@@ -1544,6 +1549,10 @@ function villageUpdate(dt) {
   else if (area === 'forest') { camX = Math.round(Math.max(0, Math.min(FOREST.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(FOREST.h - 196, vy - 100))); }
   else { const r = ROOMS[area]; camX = -Math.round((320 - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
 }
+function sleepNow() {
+  const t = trainOf(); t.day++; t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 60); t.meal = 0; t.mom = false;
+  trSave(); vFade = 1; sfx('ok'); vMsg = 'YOU SLEPT WELL. DAY ' + t.day + '. STRAIN -60.'; say(vMsg);
+}
 function vEat(m) {
   const t = trainOf();
   if (t.sessions < m.turns) { sfx('bad'); vMsg = 'NOT ENOUGH TIME LEFT TODAY.'; return; }
@@ -1570,11 +1579,12 @@ function villagePress(k) {
   else if (tg === 'ramen') enterRoom('ramen');
   else if (tg === 'home') enterRoom('home');
   else if (tg === 'rest') {
-    if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. NO TIME LEFT. GO FIGHT.'; }
+    if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; }
     else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
     else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
+  } else if (tg === 'bed') { sleepNow();
   } else if (tg === 'clue') { inspectClue();
   } else if (tg === 'sign') {
     const s = V_SIGNS.find(q => Math.hypot(vx - q.x, vy - q.y) < 22); sfx('ok'); vTalk = (s.gate && gateOpen()) ? 'THE GATE IS OPEN. BE CAREFUL IN THE FOREST.' : s.text; say(vTalk);
@@ -1697,7 +1707,7 @@ function drawVillage() {
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', 'SOUP, BIG MEAL OR FEAST.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, '']) : ['', ''];
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], person: pinfo }[tg];
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
@@ -1753,7 +1763,7 @@ function boyTalk() {
   const q = questOf(), t = trainOf();
   if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! PLEASE FIND HER! (QUEST STARTED. THE EAST GATE IS OPEN.)'; }
   else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
-  else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2)'; }
+  else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2, TRAINING CAP +2)'; }
   else vTalk = 'BOY: WHEN I GROW UP I WILL BE STRONG LIKE YOU!';
   say(vTalk);
 }
