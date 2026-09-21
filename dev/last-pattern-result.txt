@@ -1,0 +1,8 @@
+blast>lance                  win  74.9% | avg turns 11.1
+blast>guard>lance            win  62.6% | avg turns 13.2
+strike>lance>guard           win   5.1% | avg turns 12.8
+blast>charge>lance           win  25.3% | avg turns 11.9
+lance>charge                 win   4.1% | avg turns 11.9
+phantom>blast                win  48.2% | avg turns 15.1
+blast>strike>phantom>lance   win  52.2% | avg turns 12.0
+random                       win  17.7% | avg turns 14.9

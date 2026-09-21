@@ -505,7 +505,8 @@ const foeInfo = mv => { // the first line shows the damage your training really 
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
 
 const params = new URLSearchParams(location.search);
-let state, mode, menuIdx, msg = '', msgT = 0, script = [], si = 0, st = 0, fast = false;
+let state, mode, menuIdx, msg = '', msgT = 0, script = [], si = 0, st = 0, fast = false, fastTurn = 0, battleFast = false;
+try { battleFast = localStorage.getItem('yadra_speed') === 'fast'; } catch (e) {}
 let over = null, overT = 0, introPage = 0, time = 0, shake = 0, flashScr = 0, hitstop = 0, curInfoMsg = '';
 let displayKnown = [], banner = null, reacted = {}, lastReactT = -9, cine = 0, cineT = 0, lastShoutT = -9, lastBanterT = -9;
 const SHOUT = { strike: 'Take this!', blast: 'Ki Blast!', lance: 'Spirit... Lance!', phantom: 'Phantom Step!', charge: 'Haaaaaaa!', guard: 'Not yet!', sense: 'Spirit Sense!' };
@@ -520,7 +521,7 @@ const parts = [], pops = [];
 
 function newGame(opts) {
   const seed = params.get('seed') ? Number(params.get('seed')) : (Date.now() & 0xffff) + 1;
-  foe = FOES[(opts && opts.foe) || 'roku'] || FOES.roku; C.setDifficulty(difficulty); C.setFoe(foe.id === 'roku' ? null : foe); C.setStats(saveData && Object.assign({}, saveData.train, { tech: saveData.tech }));
+  foe = FOES[(opts && opts.foe) || 'roku'] || FOES.roku; C.setDifficulty(difficulty); C.setFoe(foe.id === 'roku' ? null : foe); C.setStats(saveData && Object.assign({}, effTrain(), { tech: saveData.tech }));
   state = C.newFight(seed);
   Object.assign(disp, { php: C.CFG.player.hp, pki: C.CFG.player.ki, pst: C.CFG.player.st, pstr: C.CFG.startStrain || 0, rhp: C.CFG.roku.hp });
   Object.assign(tgt, disp);
@@ -788,7 +789,7 @@ function pickBanter(ev) {
   lastBanterT = state.t; return pool[(Math.random() * pool.length) | 0];
 }
 function startStep() {
-  const s = script[si]; st = 0; fast = false;
+  const s = script[si]; st = 0; fast = fastTurn > 0;
   P.pose = R.pose = 'idle'; P.lean = R.lean = 0; P.squash = R.squash = 1; cineT = (s && s.cine) ? 1 : 0;
   if (!s) return;
   if (s.pose && s.pose[0]) s.pose[0].pose = s.pose[1];
@@ -804,6 +805,7 @@ function startFightIntro(line) { // Roku slides in like a boss reveal
   si = 0; st = 0; mode = 'anim'; startStep();
 }
 function finishTurn() {
+  fastTurn = 0;
   P.alpha = 1; P.ox = 0; R.ox = 0; P.pose = R.pose = 'idle'; P.lean = R.lean = 0; P.squash = R.squash = 1; cineT = 0;
   if (state.over) { over = state.over; overT = 0; mode = 'over'; justSaved = recordFight(state.over === 'win'); sfx(over === 'win' ? 'win' : 'lose'); setMsg(''); overTxt = overLine(); say(overTxt); }
   else { mode = 'menu'; setMsg(state.p.collapsed ? "YOU CAN'T MOVE! PRESS Z." : ''); curInfoMsg = ''; }
@@ -811,7 +813,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', v:'zoom', V:'zoom' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -826,7 +828,7 @@ cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
   if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice'); else if (!touchMode && inside(BTN_F)) press('full');
-  { const rawX = x + (mode === 'village' ? CW - W : OFFX); if (mode === 'village' && y < 14 && rawX > CW - 70) press('map'); }
+  { const rawX = x + (mode === 'village' ? CW - W : OFFX); if (mode === 'village' && y < 14 && rawX > CW - 70) press('map'); else if (mode === 'village' && y < 14 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) press('log'); }
 });
 function toggleFullscreen() {
   const d = document.documentElement;
@@ -835,6 +837,8 @@ function toggleFullscreen() {
 function press(k) {
   if (k === 'full') { toggleFullscreen(); return; }
   if (k === 'map') { toggleMap(); return; }
+  if (k === 'log') { toggleLog(); return; }
+  if (k === 'zoom' && mode !== 'map') return;
   if (k === 'mute') { setMuted(!muted); if (!muted) sfx('ok'); return; }
   if (k === 'voice') { setVoice(!voiceOn); return; }
   if (menuPress(k)) return;
@@ -842,7 +846,7 @@ function press(k) {
     if (k === 'ok' || k === 'back') { sfx('ok'); introPage++; if (introPage >= INTRO.length) { stopSpeech(); setMsg(''); toVillage('ROKU: TRAIN FIRST. I WAIT IN THE ARENA.'); } else { setMsg(INTRO[introPage]); say(INTRO[introPage]); } }
     return;
   }
-  if (mode === 'anim') { if (k === 'ok' || k === 'back') { fast = true; stopSpeech(); } return; }
+  if (mode === 'anim') { if (k === 'ok' || k === 'back') { fastTurn = k === 'back' ? 2 : Math.max(fastTurn, 1); fast = true; stopSpeech(); } return; }
   if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (foe.id !== 'roku') foeAfter(over === 'win'); else if (saveData) toVillage('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
   if (mode === 'menu') {
     if (state.p.collapsed) { if (k === 'ok') { sfx('ok'); doTurn('collapse'); } return; }
@@ -1038,7 +1042,7 @@ function update(dt) {
     const s = script[si];
     if (!s) { finishTurn(); return; }
     const u0 = s.dur > 0 ? clamp01(st / s.dur) : 0;
-    st += dt * (fast ? 3 : 1) * (s.speed ? s.speed(u0) : 1); const u = s.dur > 0 ? clamp01(st / s.dur) : 1;
+    st += dt * (fastTurn === 2 ? 14 : fastTurn === 1 ? 4 : battleFast ? 1.7 : 1) * (s.speed ? s.speed(u0) : 1); const u = s.dur > 0 ? clamp01(st / s.dur) : 1;
     if (s.upd) s.upd(u);
     if (speaking && time > speakDeadline) speaking = false;
     if (st >= s.dur && (s.speak || s.shout) && speaking && !fast) { st = s.dur; return; } // wait until the voice is done
@@ -1057,6 +1061,7 @@ function render() {
   if (touchHintEl) touchHintEl.style.display = (touchMode && mode === 'village') ? 'flex' : 'none';
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
   if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
+  if (mode === 'log') { ctx.save(); ctx.translate(OFFX, 0); drawLog(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
   if (mode === 'village') { drawVillage(); ctx.save(); ctx.translate(CW - W, 0); drawToggles(); ctx.restore(); return; } // buttons sit at the right end of the wide box
   ctx.save(); ctx.translate(OFFX, 0);
   if (OFFX > 0) drawSides();
@@ -1253,16 +1258,16 @@ function drawCreator() {
 }
 function drawOptions() {
   flatBg(); center('OPTIONS', 10, '#ffd040', 2);
-  const rows = [['SOUND', muted ? 'OFF' : 'ON', !muted], ['VOICE', voiceOn ? 'ON' : 'OFF', voiceOn], ['DIFFICULTY', difficulty.toUpperCase(), true], ['BACK', '', true]];
+  const rows = [['SOUND', muted ? 'OFF' : 'ON', !muted], ['VOICE', voiceOn ? 'ON' : 'OFF', voiceOn], ['DIFFICULTY', difficulty.toUpperCase(), true], ['BATTLE SPEED', battleFast ? 'FAST' : 'NORMAL', true], ['BACK', '', true]];
   rows.forEach((r, i) => {
-    const y = 36 + i * 26, sel = i === optIdx;
-    ctx.fillStyle = sel ? '#1e1e48' : '#0e0e26'; ctx.fillRect(20, y - 5, 280, 24);
+    const y = 30 + i * 22, sel = i === optIdx;
+    ctx.fillStyle = sel ? '#1e1e48' : '#0e0e26'; ctx.fillRect(20, y - 4, 280, 20);
     if (sel) textS('>', 26, y, '#ffe060', 2);
     textS(r[0], 44, y, sel ? '#ffe060' : '#ffffff', 2);
-    if (r[1]) textS(r[1], 292 - textW(r[1], 2), y, i === 2 ? '#ffd040' : (r[2] ? '#80ff80' : '#ff8080'), 2);
+    if (r[1]) textS(r[1], 292 - textW(r[1], 2), y, i === 2 || i === 3 ? '#ffd040' : (r[2] ? '#80ff80' : '#ff8080'), 2);
   });
   const desc = { training: 'ROKU LEARNS LITTLE. GOOD TO PRACTISE.', normal: 'ROKU LEARNS YOUR HABITS.', master: 'ROKU READS YOU AND HITS HARDER.' }[difficulty];
-  center(desc, 146, '#c8c8e8', 1);
+  center(optIdx === 3 ? 'IN A FIGHT: Z = FASTER, X = SKIP THE TURN.' : desc, 146, '#c8c8e8', 1);
   center('CONTROLS', 168, '#ffd040', 1);
   (touchMode ? ['DRAG TO MOVE. TAP TO SELECT.', 'TAP < BACK TO LEAVE.'] : ['ARROWS/WASD: MOVE   Z/SPACE: SELECT', 'X/ESC: BACK   M: SOUND   T: VOICE']).forEach((l, i) => center(l, 182 + i * 12, '#c8c8e8', 1));
 }
@@ -1417,24 +1422,30 @@ const V_PEOPLE = [
   { name: 'DOG', body: '#c89060', hair: '#c89060', zone: [10, 165, 110, 190], dog: true, lines: ['WOOF!', 'WOOF WOOF!'] },
   { name: 'FISHER', body: '#4080c0', hair: '#402010', zone: [390, 326, 530, 346], lines: ['STAND ON THE DOCK. WAIT FOR THE BITE, THEN PRESS Z!', 'BIG FISH PULL HARD. A STRONG BODY HELPS. A CALM MIND GIVES YOU MORE TIME.', 'BRING YOUR FISH TO THE RAMEN COOK. HE GRILLS THEM FOR FREE.'] },
   { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
-  { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [110, 128, 172, 186], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
+  { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [180, 166, 226, 196], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
   { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
 const V_TIPS = ['A WILD BOAR ROAMS THE FOREST. FOLLOW ITS TRACKS WITH SPIRIT SENSE. HIT IT HARD BEFORE IT RUNS!', 'CATCH FISH AT THE LAKE DOCK. GRILL THEM AT THE RAMEN HOUSE. IT IS FREE.', 'SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
+ROOMS.cave = { w: 200, h: 130, door: 100, miny: 56, name: 'MOONSTONE CAVE', solids: [[88, 48, 118, 66]] }; ROOM_PEOPLE.cave = [];
+ROOMS.gym = { w: 220, h: 140, door: 110, miny: 62, name: 'TRAINING HALL', solids: [[84, 44, 136, 66], [18, 44, 44, 76], [176, 44, 202, 76]] };
+ROOM_PEOPLE.gym = [{ name: 'COACH', role: 'coach', x: 62, y: 104, body: '#c04040', hair: '#101010', lines: ['ROKU TRAINED HERE WHEN HE WAS YOUR AGE.', 'BODY, KI AND FOCUS. THREE ROADS. PICK YOURS.', 'STRAIN IS THE PRICE. PAY IT SLOWLY.'] }];
 Object.keys(ROOM_PEOPLE).forEach(k => ROOM_PEOPLE[k].forEach(p => { p.face = 1; p.step = 0; p.line = 0; }));
-function curPeople() { if (TOWNS[area]) return townPeople(); return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
+function curPeople() { if (TOWNS[area]) return townPeople(); return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3).concat(dayPeople()) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
 function toVillage(line) {
   stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vAfterTalk = null; vMenu = null; vChoice = null; vInputLock = .6; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
 function enterRoom(name) { area = name; vx = ROOMS[name].door; vy = ROOMS[name].h - 16; vFade = 1; vWalk = 0; vMsg = ''; sfx('ok'); }
-function exitRoom() { if (area === 'hut' && hutReturn) { area = hutReturn.area; vx = hutReturn.x; vy = hutReturn.y; vFade = 1; vWalk = 0; vMsg = ''; sfx('move'); return; } const b = area === 'home' ? V_HOME : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
+function exitRoom() { if ((area === 'hut' || area === 'cave') && hutReturn) { area = hutReturn.area; vx = hutReturn.x; vy = hutReturn.y; vFade = 1; vWalk = 0; vMsg = ''; sfx('move'); return; } const b = area === 'home' ? V_HOME : area === 'gym' ? V_TRAIN : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
 function vNearPerson() { let best = -1, bd = 26; curPeople().forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
   if (area === 'forest') return forestTarget();
   if (TOWNS[area]) return townTarget();
+  if (area === 'cave') { if (Math.hypot(vx - 102, vy - 80) < 26) return 'stone'; if (Math.hypot(vx - 160, vy - 92) < 22) return 'cchest'; return null; }
+  if (area === 'gym' && vy <= 80 && Math.abs(vx - 110) < 30) return 'machine';
+  if (area === 'home' && vy >= 50 && vy <= 68 && vx > 112 && vx < 190) return 'stove';
   if (area === 'home' && vx > 6 && vx < 74 && vy > 76 && vy < 100 && vNearPerson() < 0) return 'bed';
   if (area !== 'village') return vNearPerson() >= 0 ? 'person' : null;
   const low = (b) => vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22;
@@ -1497,7 +1508,7 @@ function villageUpdate(dt) {
 }
 function sleepNow() {
   const t = trainOf(); t.day++; t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 60); t.meal = 0; t.mom = false;
-  trSave(); vFade = 1; sfx('ok'); vMsg = 'YOU SLEPT WELL. DAY ' + t.day + '. STRAIN -60.'; say(vMsg);
+  trSave(); vFade = 1; sfx('ok'); vMsg = 'DAY ' + t.day + '. STRAIN -60. ' + dayEvent().note; say(vMsg);
 }
 function vEat(m) {
   const t = trainOf();
@@ -1518,8 +1529,15 @@ function villagePress(k) {
   if (vInputLock > 0 && k === 'ok') return true; // the tap that closed the intro must not also start a conversation
   if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); if (vAfterTalk) { const f = vAfterTalk; vAfterTalk = null; f(); } } return true; }
   if (vChoice) {
-    if (k === 'up' || k === 'down') { vChoice.idx ^= 1; sfx('move'); }
-    else if (k === 'ok' || k === 'back') { const c = vChoice; vChoice = null; if (k === 'ok' && c.idx === 0) c.yes(); else { sfx('move'); vTalk = c.no; say(vTalk); } }
+    const n = vChoice.opts.length;
+    if (k === 'up') { vChoice.idx = (vChoice.idx + n - 1) % n; sfx('move'); }
+    else if (k === 'down') { vChoice.idx = (vChoice.idx + 1) % n; sfx('move'); }
+    else if (k === 'ok' || k === 'back') {
+      const c = vChoice; vChoice = null;
+      if (k === 'ok' && c.pick) c.pick(c.idx);
+      else if (k === 'ok' && c.idx === 0) c.yes();
+      else if (c.no) { sfx('move'); vTalk = c.no; say(vTalk); }
+    }
     return true;
   }
   if (vMenu) {
@@ -1535,7 +1553,7 @@ function villagePress(k) {
   const t = trainOf(), tg = vTarget();
   if (!tg && area === 'forest') { senseNow(); return true; }
   if (tg && tg.slice(0, 2) === 't:') { townAct(tg); return true; }
-  if (tg === 'train') { sfx('ok'); trainHall = false; toTrain('ROKU: PICK YOUR TRAINING.'); }
+  if (tg === 'train') { sfx('ok'); enterRoom('gym'); }
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
   else if (tg === 'ramen') enterRoom('ramen');
   else if (tg === 'home') enterRoom('home');
@@ -1546,6 +1564,10 @@ function villagePress(k) {
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
   } else if (tg === 'bed') { sleepNow();
+  } else if (tg === 'stove') { sfx('ok'); openCook();
+  } else if (tg === 'machine') { sfx('ok'); trainHall = false; toTrain('ROKU: PICK YOUR TRAINING.');
+  } else if (tg === 'stone') { touchStone();
+  } else if (tg === 'cchest') { const f = foundOf(); if (f.cavechest) { sfx('bad'); vTalk = 'THE CHEST IS EMPTY.'; say(vTalk); } else { openChest('cavechest', true); } 
   } else if (tg === 'fish') { fishStart();
   } else if (tg === 'clue') { inspectClue();
   } else if (tg === 'sign') {
@@ -1553,13 +1575,17 @@ function villagePress(k) {
   } else if (tg === 'person') {
     const p = curPeople()[vNearPerson()];
     if (p.quest) questTalk(p);
+    else if (p.side) sideTalk(p);
+    else if (p.ev) eventTalk(p);
     else if (p.role === 'boy') boyTalk();
+    else if (p.role === 'sister') sisterTalk(p);
+    else if (p.shop) shopTalk(p);
     else if (p.role === 'cook') cookTalk();
     else if (p.role === 'mom') {
       if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
       else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = 'MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)'; }
       say(vTalk);
-    } else { sfx(p.dog ? 'move' : 'ok'); vTalk = (p.dog ? '' : p.name + ': ') + p.lines[p.line++ % p.lines.length]; say(vTalk); }
+    } else { sfx(p.dog ? 'move' : 'ok'); vTalk = npcSay(p); say(vTalk); }
   }
   return true;
 }
@@ -1723,6 +1749,13 @@ function drawRoom() {
     rr(92, 74, 52, 16, '#a06a3a'); rr(92, 88, 52, 3, '#7a4a2a'); rr(100, 70, 8, 5, '#f0f0f0'); rr(116, 70, 8, 5, '#f0f0f0'); rr(130, 71, 8, 4, '#e0a040');
     rr(116, 30, 68, 22, '#6a6a7a'); rr(116, 30, 68, 3, '#8a8a9a'); rr(126, 22, 14, 12, '#404050'); rr(128, 20, 10, 3, '#303040'); rr(160, 34, 14, 14, '#404050');
     rr(150, 8, 30, 20, '#7a5a3a'); rr(152, 10, 26, 16, '#e0c880'); textS('HOME', 156, 15, '#7a4a2a', 1);
+  } else if (area === 'cave') {
+    rr(0, 0, r.w, r.h, '#2a2438'); rr(0, 40, r.w, r.h - 40, '#3a3448'); ctx.fillStyle = '#4a4458'; for (let i = 0; i < 12; i++) ctx.fillRect(10 + i * 16, 8 + (i % 3) * 8, 10, 14); ctx.fillStyle = 'rgba(160,200,255,' + (0.22 + 0.12 * Math.sin(time * 2)) + ')'; ctx.fillRect(76, 34, 52, 52);
+    rr(92, 50, 20, 26, '#c8e0ff'); rr(97, 44, 10, 10, '#f0f8ff'); rr(148, 82, 24, 14, foundOf().cavechest ? '#5a4030' : '#8a5a2a'); rr(148, 82, 24, 4, '#c09040'); if (!foundOf().cavechest) rr(158, 86, 4, 5, '#f0d040');
+  } else if (area === 'gym') {
+    rr(0, 40, r.w, r.h - 40, '#5a5a68'); rr(20, 92, 80, 34, '#3a5aa0'); rr(120, 92, 80, 34, '#a03a3a'); rr(22, 94, 76, 30, '#4a6ab8'); rr(122, 94, 76, 30, '#b84a4a');
+    [[26, 44], [184, 44]].forEach(c => { rr(c[0] + 6, c[1], 3, 12, '#c0c0c8'); rr(c[0], c[1] + 12, 16, 22, '#a06030'); rr(c[0] + 2, c[1] + 14, 12, 4, '#c08040'); });
+    rr(84, 44, 52, 24, '#606070'); rr(88, 48, 44, 10, Math.floor(time * 3) % 2 ? '#ff5040' : '#a03020'); rr(92, 60, 36, 8, '#404050'); textS('GRAVITY', 88, 32, '#ffe060', 1);
   } else {
     rr(20, 8, 200, 4, '#3a2a4a'); [[30, '#c04040'], [70, '#e0a040'], [110, '#40a060'], [150, '#4060c0'], [190, '#c040a0']].forEach(l => { rr(l[0], 12, 4, 10, '#e8e0c8'); rr(l[0] - 4, 20, 12, 12, l[1]); });
     rr(24, 44, 192, 24, '#8a5a30'); rr(24, 44, 192, 6, '#c09060'); rr(24, 62, 192, 6, '#6a4020');
@@ -1770,12 +1803,13 @@ function drawVillage() {
   textS(hero.name, 6, 3, '#80c8ff', 1); textS('DAY ' + t.day + ' ' + timeName(t), 66, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
   const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, 252, 3, '#ffb060', 1);
-  textS(CW > 320 ? '[G] MAP' : 'MAP', CW > 320 ? CW - 48 : CW - 22, 3, '#80e0ff', 1); if (CW > 320) textS(placeName(), CW - 48 - textW(placeName()) - 10, 3, '#c8f0ff', 1);
+  textS(CW > 320 ? '[G] MAP' : 'MAP', CW > 320 ? CW - 48 : CW - 22, 3, '#80e0ff', 1); if (CW > 320) { textS(placeName(), CW - 48 - textW(placeName()) - 10, 3, '#c8f0ff', 1); textS('[L] LOG', CW - 48 - textW(placeName()) - 10 - 52, 3, '#ffd080', 1); } else if (!t.meal) textS('LOG', 232, 3, '#ffd080', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'TAP' : 'Z';
   if (vChoice) {
-    vChoice.opts.forEach((o, i) => { const y = 200 + i * 19, sel = i === vChoice.idx; if (sel) textS('>', 6, y, '#ffe060', 2); textS(o, 24, y, sel ? '#ffe060' : '#ffffff', 2); });
+    const cn = vChoice.opts.length, big = cn <= 2;
+    vChoice.opts.forEach((o, i) => { const y = big ? 200 + i * 19 : 201 + i * 13, sel = i === vChoice.idx, dim = vChoice.dim && vChoice.dim[i]; if (sel) textS('>', 6, y, '#ffe060', big ? 2 : 1); textS(o, big ? 24 : 16, y, sel ? '#ffe060' : dim ? '#8888a0' : '#ffffff', big ? 2 : 1); });
   } else if (vMenu) {
     { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
   } else if (vTalk) {
@@ -1784,10 +1818,10 @@ function drawVillage() {
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', q2Of().step === 1 ? 'HE WANTS A GOLD FISH.' : 'MEALS, OR GRILL A FISH FREE.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, p.role === 'boy' && questOf().step >= 4 ? 'FRIEND. BOND ' + bondOf().boy + '/5' : '']) : ['', ''];
-    const info = (tg.slice(0, 2) === 't:') ? townInfo(tg) : { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], person: pinfo }[tg];
+    const info = (tg.slice(0, 2) === 't:') ? townInfo(tg) : { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], stove: ['COOK AT THE STOVE', '1 TIME. BUFF FOR TODAY.'], machine: ['USE THE GRAVITY MACHINE', 'BODY, KI, FOCUS.'], stone: ['TOUCH THE MOONSTONE', 'IT GLOWS.'], cchest: ['OPEN THE CHEST', ''], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
-    wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
+    wrap(vMsg || buffLine(), 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
     textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
   }
   if (vFish) drawFishUi();
@@ -1861,10 +1895,11 @@ function boyTalk() {
   if (q.step === 0) { sfx('ok'); offerQuest('BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! WILL YOU FIND HER?', () => { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: THANK YOU! I OPENED THE EAST GATE FOR YOU. (QUEST STARTED)'; say(vTalk); }, 'BOY: OH... PLEASE COME BACK SOON. I AM SO WORRIED.'); return; }
   else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
   else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2, TRAINING CAP +2)'; }
-  else { sfx('ok'); vMenu = { idx: 0, kind: 'friend' }; return; }
+  else { sfx('ok'); vMenu = { idx: 0, kind: 'friend', who: 'boy' }; return; }
   say(vTalk);
 }
 function questLine() {
+  { const pm = saveData && saveData.pin ? missionList().find(m => m.id === saveData.pin && m.st === 1) : null; if (pm) return 'QUEST: ' + pm.hud; }
   const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : 'QUEST: FIND THE SISTER. EAST.';
   if (q.step === 3) return 'QUEST: TELL THE BOY.';
   if (q2Of().step === 1) return 'QUEST: GOLD FISH FOR COOK'; return activeQuestLine();
@@ -1987,12 +2022,12 @@ function drawFishUi() {
   textS(f.phase === 'wait' ? (touchMode ? 'TAP WHEN IT BITES. NOT BEFORE.' : key + ' TOO EARLY SCARES IT. X: STOP') : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
 }
 function fishItems() { return trainOf().inv.map((k, i) => ({ fish: k, idx: i, n: FISH[k].n, short: '+' + FISH[k].hp + ' HP  STR ' + (FISH[k].str > 0 ? '+' : '') + FISH[k].str })); }
-function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
+function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); if (vMenu && vMenu.kind === 'shop') return shopItems(); if (vMenu && vMenu.kind === 'cook') return cookItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
 // ================= mission 2 (the cook's golden ramen) + the boy as your first friend =================
 const GOLDEN = { n: 'GOLDEN RAMEN', turns: 1, hp: 20, str: -25, d: '+20 HP FIGHT, STRAIN -25', short: '+20 HP  STR -25' };
 const BOY_TALK = ['BOY: I AM STILL SCARED OF THE FOREST. BUT YOU WERE BRAVE.', 'BOY: MY SISTER SAYS I TALK TOO MUCH.', 'BOY: I WANT TO LEARN A KI BLAST. CAN YOU SHOW ME?', 'BOY: WHEN I FEEL SCARED, I THINK OF YOU.', 'BOY: ONE DAY WE WILL TRAIN TOGETHER AGAINST ROKU!', 'BOY: YOU ARE MY BEST FRIEND!'];
 function q2Of() { trainOf(); const q = saveData.q2 || (saveData.q2 = { step: 0 }); q.step = Math.max(0, Math.min(2, q.step | 0)); return q; }
-function bondOf() { trainOf(); const b = saveData.bond || (saveData.bond = { boy: 0, talkDay: 0 }); b.boy = Math.max(0, Math.min(5, b.boy | 0)); return b; }
+function bondOf() { trainOf(); const b = saveData.bond || (saveData.bond = { boy: 0, talkDay: 0 }); b.boy = Math.max(0, Math.min(5, b.boy | 0)); b.sister = Math.max(0, Math.min(5, b.sister | 0)); return b; }
 function openFoodMenu() { vMenu = { idx: 0, kind: 'food' }; }
 function cookTalk() {
   const q = q2Of(), t = trainOf(), gi = t.inv.indexOf('gold');
@@ -2000,29 +2035,81 @@ function cookTalk() {
   else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU, TRAINING CAP +2)'; say(vTalk); vAfterTalk = openFoodMenu; }
   else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: GOLD FISH FOR COOK'; openFoodMenu(); }
 }
+const FR = { boy: { n: 'BOY', talk: BOY_TALK, key: 'talkDay' }, sister: { n: 'SISTER', key: 'sisterDay', talk: ['SISTER: I AM STILL A LITTLE SCARED OF THE DARK. BUT NOT WITH YOU.', 'SISTER: MY BROTHER TALKS ABOUT YOU ALL DAY.', 'SISTER: TEACH ME HOW TO STAND LIKE A FIGHTER?', 'SISTER: I LIKE FISHING MORE THAN FIGHTING, HONESTLY.', 'SISTER: WE SHOULD FISH TOGETHER! I KNOW A GOOD SPOT.', 'SISTER: YOU ARE LIKE A BIG BROTHER TO ME.'] } };
 function friendItems() {
-  const t = trainOf(), b = bondOf();
-  return [{ act: 'talk', n: 'TALK', short: 'BOND ' + b.boy + '/5' }, { act: 'give', n: 'GIVE A FISH', short: 'BAG ' + t.inv.length + '  BOND +1' }, { act: 'spar', n: 'SPAR', short: '1 TIME  +1 STAT' }];
+  const t = trainOf(), b = bondOf(), w = vMenu && vMenu.who || 'boy';
+  return [{ act: 'talk', n: 'TALK', short: 'BOND ' + b[w] + '/5' }, { act: 'give', n: 'GIVE A FISH', short: 'BAG ' + t.inv.length + '  BOND +1' }, { act: 'spar', n: 'SPAR', short: '1 TIME  +1 STAT' }, { act: 'fishtog', n: 'FISH TOGETHER', short: '1 TIME  +FISH' }];
 }
-function bondUp(n) { const b = bondOf(), before = b.boy; b.boy = Math.min(5, b.boy + n); return before < 5 && b.boy >= 5 ? ' (BEST FRIENDS! TRAINING CAP +2)' : ''; }
+function bondUp(n, w) { w = w || 'boy'; const b = bondOf(), before = b[w]; b[w] = Math.min(5, b[w] + n); return before < 5 && b[w] >= 5 ? (w === 'boy' ? ' (BEST FRIENDS! TRAINING CAP +2)' : ' (BEST FRIENDS!)') : ''; }
 function friendPick(m) {
-  const t = trainOf(), b = bondOf();
+  const t = trainOf(), b = bondOf(), w = vMenu.who || 'boy', F = FR[w];
   if (m.act === 'talk') {
-    let extra = ''; if (b.talkDay !== t.day) { b.talkDay = t.day; extra = bondUp(1); }
-    trSave(); vMenu = null; sfx('ok'); vTalk = BOY_TALK[b.boy] + extra; say(vTalk); return;
+    let extra = ''; if (b[F.key] !== t.day) { b[F.key] = t.day; extra = bondUp(1, w); }
+    trSave(); vMenu = null; sfx('ok'); vTalk = F.talk[b[w]] + extra; say(vTalk); return;
   }
   if (m.act === 'give') {
     if (!t.inv.length) { sfx('bad'); vMsg = 'YOUR BAG IS EMPTY.'; vMenu = null; return; }
-    const kind = t.inv.shift(), extra = bondUp(kind === 'gold' ? 2 : 1); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
-    vTalk = 'BOY: A ' + FISH[kind].n + '! THANK YOU! (BOND ' + b.boy + '/5)' + extra; say(vTalk); return;
+    const kind = t.inv.shift(), extra = bondUp(kind === 'gold' ? 2 : 1, w); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
+    vTalk = F.n + ': A ' + FISH[kind].n + '! THANK YOU! (BOND ' + b[w] + '/5)' + extra; say(vTalk); return;
   }
   if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP AT HOME.'; vMenu = null; return; }
+  if (m.act === 'fishtog') {
+    if (t.inv.length >= BAG_MAX) { sfx('bad'); vMsg = 'YOUR BAG IS FULL.'; vMenu = null; return; }
+    t.sessions--; const kind = fishPick(t), kind2 = w === 'sister' || Math.random() < .35 ? 'small' : null; t.inv.push(kind); if (kind2 && t.inv.length < BAG_MAX) t.inv.push(kind2);
+    const extra = bondUp(1, w); trSave(); vMenu = null; sfx('ok'); vFlash = .3; saveData.fishTog = (saveData.fishTog | 0) + 1;
+    vTalk = 'YOU FISHED WITH THE ' + F.n + '. YOU GOT ' + FISH[kind].n + (kind2 && t.inv.length && kind2 ? ' AND A SMALL FISH' : '') + '! (BOND ' + b[w] + '/5)' + extra; say(vTalk); return;
+  }
   const names = ['body', 'ki', 'focus'], low = names.filter(k => t[k] < statCapOf(k)).sort((a, c) => t[a] - t[c])[0];
   t.sessions--; t.fatigue = Math.min(99, t.fatigue + 6); if (low) t[low]++;
-  const extra = bondUp(1); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
-  vTalk = 'YOU SPARRED WITH THE BOY. ' + (low ? low.toUpperCase() + ' +1. ' : 'ALL STATS AT THE CAP. ') + 'STRAIN +6. (BOND ' + b.boy + '/5)' + extra; say(vTalk);
+  const extra = bondUp(1, w); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
+  vTalk = 'YOU SPARRED WITH THE ' + F.n + '. ' + (low ? low.toUpperCase() + ' +1. ' : 'ALL STATS AT THE CAP. ') + 'STRAIN +6. (BOND ' + b[w] + '/5)' + extra; say(vTalk);
 }
-function vPick(m) { if (vMenu && vMenu.kind === 'friend') friendPick(m); else vEat(m); }
+
+// ================= coins, shops, ingredients, cooking (temporary Body/Focus buffs) =================
+const ING = { herb: { n: 'MOUNTAIN HERB', price: 10 }, root: { n: 'IRON ROOT', price: 10 }, honey: { n: 'WILD HONEY', price: 8 } };
+const SELL = { small: 4, medium: 8, big: 16, gold: 40, meat: 12 };
+const DISHES = [
+  { id: 'tea', n: 'HERB TEA', need: { herb: 1 }, buff: { focus: 2 }, fat: -10, meal: 0, short: 'HERB  FOCUS +2' },
+  { id: 'stew', n: 'ROOT STEW', need: { root: 1 }, fish: true, buff: { body: 2 }, fat: 0, meal: 10, short: 'ROOT+FISH  BODY +2' },
+  { id: 'plate', n: 'WARRIOR PLATE', need: { root: 1, herb: 1, honey: 1 }, buff: { body: 2, focus: 2 }, fat: -15, meal: 15, short: 'ALL 3  BODY+FOCUS +2' }];
+function coinsOf() { trainOf(); return saveData.coins | 0; }
+function ingOf() { trainOf(); const g = saveData.ing || (saveData.ing = {}); Object.keys(ING).forEach(k => { g[k] = Math.max(0, g[k] | 0); }); return g; }
+function buffOf() { const t = trainOf(), b = saveData.buff; return b && b.day === t.day ? b : { day: t.day, body: 0, focus: 0 }; }
+function buffLine() { const b = buffOf(); return (b.body || b.focus) ? 'BUFF TODAY: ' + (b.body ? 'BODY +' + b.body + ' ' : '') + (b.focus ? 'FOCUS +' + b.focus : '') : ''; }
+function effTrain() { const t = trainOf(), b = buffOf(); return Object.assign({}, t, { body: Math.min(STAT_MAX, t.body + b.body), focus: Math.min(STAT_MAX, t.focus + b.focus) }); }
+function shopTalk(p) {
+  sfx('ok'); const line = p.lines[p.line++ % p.lines.length]; vTalk = p.name + ': ' + line; say(vTalk);
+  vAfterTalk = () => { vMenu = { idx: 1, kind: 'shop' }; };
+}
+function shopItems() {
+  const t = trainOf(), g = ingOf(), r = [{ act: 'info', n: 'COINS ' + coinsOf(), short: 'HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey }];
+  t.inv.forEach((k, i) => r.push({ act: 'sell', idx: i, n: 'SELL ' + FISH[k].n, short: '+' + SELL[k] + ' COINS' }));
+  Object.keys(ING).forEach(k => r.push({ act: 'buy', k, n: 'BUY ' + ING[k].n, short: ING[k].price + ' COINS' }));
+  return r;
+}
+function shopPick(m) {
+  const t = trainOf();
+  if (m.act === 'sell') { const k = t.inv.splice(m.idx, 1)[0]; saveData.coins = coinsOf() + SELL[k]; saveData.sold = (saveData.sold | 0) + 1; trSave(); sfx('ok'); vMsg = 'SOLD ' + FISH[k].n + ' FOR ' + SELL[k] + '.'; vMenu.idx = Math.min(vMenu.idx, shopItems().length - 1); }
+  else if (m.act === 'buy') { if (coinsOf() < ING[m.k].price) { sfx('bad'); vMsg = 'NOT ENOUGH COINS.'; return; } saveData.coins = coinsOf() - ING[m.k].price; ingOf()[m.k]++; trSave(); sfx('ok'); vMsg = 'BOUGHT ' + ING[m.k].n + '.'; }
+  else { sfx('move'); vMsg = 'SELL FISH. BUY INGREDIENTS. COOK AT HOME OR AT A CAMP.'; }
+}
+function cookItems() { const g = ingOf(); return [{ act: 'info', n: 'BAG HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey, short: '' }].concat(DISHES.map(d => ({ act: 'cook', d, n: d.n, short: d.short }))); }
+function cookPick(m) {
+  const t = trainOf(), g = ingOf(); if (m.act !== 'cook') { sfx('move'); return; }
+  const d = m.d; if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. NO TIME TO COOK.'; return; }
+  const miss = Object.keys(d.need).find(k => g[k] < d.need[k]); if (miss) { sfx('bad'); vMsg = 'YOU NEED ' + ING[miss].n + '.'; return; }
+  let fi = -1; if (d.fish) { fi = t.inv.findIndex(k => k !== 'gold'); if (fi < 0) { sfx('bad'); vMsg = 'YOU NEED A FISH OR MEAT IN THE BAG.'; return; } }
+  Object.keys(d.need).forEach(k => { g[k] -= d.need[k]; }); if (fi >= 0) t.inv.splice(fi, 1);
+  t.sessions--; t.fatigue = Math.max(0, Math.min(99, t.fatigue + d.fat)); if (d.meal) t.meal = Math.max(t.meal, d.meal);
+  saveData.buff = { day: t.day, body: d.buff.body | 0, focus: d.buff.focus | 0 }; saveData.cooked = (saveData.cooked | 0) + 1; trSave(); vMenu = null; sfx('win'); vFlash = .4;
+  vTalk = 'YOU COOKED ' + d.n + '! ' + buffLine() + '. (1 TIME SLOT)'; say(vTalk);
+}
+function openCook() { vMenu = { idx: 1, kind: 'cook' }; }
+function sisterTalk(p) {
+  if (questOf().step < 4) { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; say(vTalk); return; }
+  sfx('ok'); vMenu = { idx: 0, kind: 'friend', who: 'sister' };
+}
+function vPick(m) { if (vMenu && vMenu.kind === 'friend') friendPick(m); else if (vMenu && vMenu.kind === 'shop') shopPick(m); else if (vMenu && vMenu.kind === 'cook') cookPick(m); else vEat(m); }
 // ================= the big world: six places, six roads, a world map =================
 // Map (from the plan): Sorya Village - Tavora - Keshin - Oraya City, and Sorya - Mirakai - Lumora - Oraya City.
 const GATE_INTO = { keshin: 2, lumora: 2, oraya: 3 }; // milestones needed to walk into a place
@@ -2034,7 +2121,7 @@ const TOWNS = {
     b: [['INN', 0, 0, '#3a8a5a', '#d8c898', 'inn'], ['BAKERY', 1, 0, '#d08a30', '#ecd8a8', 'food'], ['FARM HOUSE', 2, 0, '#8a5a3a', '#d8c0a0', 'hut', { title: 'FARM HOUSE', npc: { quest: 'tavora', name: 'FARMER WIFE', body: '#e0a0c0', hair: '#804020', lines: ['MY HUSBAND WORKS FROM DAWN. HE NEEDS MORE THAN BREAD!', 'A HEALTHY BODY STARTS WITH A FULL BELLY.'] } }],
       ['MARKET', 3, 0, '#a04060', '#e0d0b0', 'hut', { title: 'MARKET', npc: { name: 'TRADER', body: '#4060a0', hair: '#c0c0c0', lines: ['I TRADE WITH EVERY TOWN ON YARDRAT. KESHIN HAS A HALL WITH 20X GRAVITY!', 'THE ROAD SOUTH-EAST IS ROUGH. SHARE YOUR FOOD WITH TRAVELLERS.'] } }],
       ['HOUSE', 4, 0, '#6a6a8a', '#d0c8b0', 'hut', { title: 'ELDER HOUSE', npc: { name: 'OLD ELDER', body: '#805090', hair: '#f0f0f0', lines: ['TAVORA FEEDS HALF OF YARDRAT.', 'ROKU WAS ONCE A STUDENT HERE. HE NEVER SAYS SO.'] } }],
-      ['BARN', 0, 1, '#8a3a2a', '#c09070', 'hut', { title: 'BARN', npc: { name: 'FARMHAND', body: '#a08040', hair: '#402010', lines: ['THE BEST TRAINING IS LIFTING HAY. NO GRAVITY NEEDED.', 'A BIG FISH FROM MIRAKAI MAKES A GREAT STEW.'] } }],
+      ['BARN', 0, 1, '#8a3a2a', '#c09070', 'hut', { title: 'BARN', npc: { side: 'crate', name: 'FARMHAND', body: '#a08040', hair: '#402010', lines: ['THE BEST TRAINING IS LIFTING HAY. NO GRAVITY NEEDED.', 'A BIG FISH FROM MIRAKAI MAKES A GREAT STEW.'] } }],
       ['HOUSE', 1, 1, '#4a7a9a', '#d8d0b8', 'hut', { title: 'HOUSE', npc: { name: 'MOTHER', body: '#c06080', hair: '#503020', lines: ['MY DAUGHTER WANTS TO BE A FIGHTER. LIKE YOU.', 'EAT WELL, TRAVELLER!'] } }]],
     people: [PL('FARMER', '#a07040', '#c0c0c0', 'r1', ['THE HARVEST IS GOOD THIS YEAR!', 'YOU CAME FROM SORYA? ROKU SENT YOU?']), PL('KID', '#40a060', '#202020', 'r0', ['I WANT A HONEY BUN!', 'ARE YOU A FIGHTER? SHOW ME A KI BLAST!'], { small: true }), PL('DOG', '#d8b080', '#d8b080', 'r1', ['WOOF!', 'WOOF WOOF!'], { dog: true }), PL('TRAVELER', '#607080', '#804020', 'r0', ['I AM GOING TO KESHIN. THE ROCKS THERE ARE HEAVY.', 'THE ROAD IS SAFE IF YOU ARE STRONG.'])],
     signs: [{ x: 30, y: 112, text: 'TAVORA. FARM TOWN. THE BEST BREAD ON YARDRAT.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO KESHIN. YOU NEED 2 MILESTONES.' }],
@@ -2042,21 +2129,21 @@ const TOWNS = {
   keshin: { name: 'KESHIN', kind: 'town', w: 560, h: 300, ground: '#7a7a72', path: '#a89870', sky: ['#4a4a6a', '#8a7a8a'], deco: 'rocks', trees: '#5a6a4a', start: [40, 102],
     b: [['INN', 0, 0, '#6a6a7a', '#c8c0a8', 'inn'], ["MINERS' MESS", 1, 0, '#a05a30', '#d8c8a8', 'food'], ['GRAVITY HALL', 2, 0, '#404050', '#a0a0b0', 'gym'], ['FORGE', 3, 0, '#802a2a', '#b8a898', 'hut', { title: 'FORGE', npc: { name: 'SMITH', body: '#a04030', hair: '#202020', lines: ['I FORGE WEIGHTS FOR THE HALL. 20X GRAVITY HURTS!', 'STRAIN IS THE PRICE OF POWER. PAY IT SLOWLY.'] } }],
       ['FOREMAN', 4, 0, '#8a6a3a', '#d0c0a0', 'hut', { title: 'FOREMAN HOUSE', npc: { quest: 'keshin', name: 'FOREMAN', body: '#c08030', hair: '#403020', lines: ['THE QUARRY NEVER SLEEPS.', 'ORAYA CITY BUYS ALL OUR STONE. THEY HAVE A GRAND ARENA.'] } }],
-      ['HOUSE', 0, 1, '#5a5a6a', '#c8c0b0', 'hut', { title: 'MINER HOUSE', npc: { name: 'MINER', body: '#707890', hair: '#101010', lines: ['THE ROCKS HERE ARE HEAVY. SO IS THE HALL.', 'DO NOT USE 20X GRAVITY WHEN YOU ARE TIRED!'] } }]],
+      ['HOUSE', 0, 1, '#5a5a6a', '#c8c0b0', 'hut', { title: 'MINER HOUSE', npc: { side: 'dispute', name: 'MINER', body: '#707890', hair: '#101010', lines: ['THE ROCKS HERE ARE HEAVY. SO IS THE HALL.', 'DO NOT USE 20X GRAVITY WHEN YOU ARE TIRED!'] } }]],
     people: [PL('MINER', '#707890', '#101010', 'r0', ['THE ROCKS HERE ARE HEAVY.', 'TRAIN IN THE HALL. THEN TRY THE ROAD.']), PL('GUARD', '#a04030', '#303030', 'r1', ['THE ROAD TO ORAYA CITY NEEDS 3 MILESTONES.', 'STRONG FIGHTERS GATHER IN THE CITY.'])],
     signs: [{ x: 30, y: 112, text: 'KESHIN. QUARRY TOWN. HOME OF THE GRAVITY HALL.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
     meals: [meal('ROCK BREAD', 1, 14, -5), meal('MINER STEW', 1, 24, 12), meal('MOUNTAIN FEAST', 2, 34, 24)], exits: [{ side: 'w', row: 0, to: 'r2' }, { side: 'e', row: 0, to: 'r3' }] },
   mirakai: { name: 'MIRAKAI', kind: 'town', w: 560, h: 330, ground: '#6a9a6a', path: '#d8c898', sky: ['#4a80b8', '#9ad0e8'], deco: 'sea', trees: '#3a9a5a', start: [40, 102], deep: true,
     water: [0, 250, 560, 330], dock: { x: 300, y: 262, wx: 300, wy: 292 },
     b: [['INN', 0, 0, '#3a7a9a', '#d8d0b0', 'inn'], ['FISH GRILL', 1, 0, '#c07a30', '#e8d8b0', 'food'], ['NET HOUSE', 2, 0, '#4a8a7a', '#d0d0b8', 'hut', { title: 'NET HOUSE', npc: { quest: 'mirakai', name: 'FISHERMAN', body: '#4080c0', hair: '#402010', lines: ['THE DEEP WATER OFF THE DOCK HOLDS THE BIG ONES.', 'A GOLD FISH BRINGS LUCK. I SAW ONE ONCE.'] } }],
-      ['BOAT SHOP', 3, 0, '#8a5a3a', '#d8c8a0', 'hut', { title: 'BOAT SHOP', npc: { name: 'BOATWRIGHT', body: '#a08050', hair: '#805020', lines: ['ONE DAY I WILL BUILD A BOAT TO LEAVE YARDRAT.', 'THE SEA ROAD TO LUMORA IS QUIET.'] } }],
+      ['BOAT SHOP', 3, 0, '#8a5a3a', '#d8c8a0', 'hut', { title: 'BOAT SHOP', npc: { side: 'letter', sideRole: 'from', name: 'BOATWRIGHT', body: '#a08050', hair: '#805020', lines: ['ONE DAY I WILL BUILD A BOAT TO LEAVE YARDRAT.', 'THE SEA ROAD TO LUMORA IS QUIET.'] } }],
       ['HOUSE', 4, 0, '#6a7a9a', '#d8d0b8', 'hut', { title: 'HOUSE', npc: { name: 'SAILOR', body: '#3060a0', hair: '#e0e0e0', lines: ['THE LAKE IS DEEP. THE FISH ARE STRONG.', 'FOCUS! THE FISH WAITS FOR A CALM MIND.'] } }]],
     people: [PL('FISHER', '#4080c0', '#402010', 'r1', ['FISH HERE ARE BIGGER THAN IN SORYA.', 'SHH! I AM WAITING FOR A BIG ONE.']), PL('GIRL', '#e06080', '#f0c040', 'r0', ['THE SEA IS SO BIG!', 'DO YOU LIKE FISH?']), PL('DOG', '#c8a080', '#c8a080', 'r0', ['WOOF!'], { dog: true })],
     signs: [{ x: 30, y: 112, text: 'MIRAKAI. LAKE TOWN. FISH FROM THE DEEP DOCK ARE BIGGER.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO LUMORA. YOU NEED 2 MILESTONES.' }],
     meals: [meal('FISH SKEWER', 1, 12, -8), meal('SEAFOOD POT', 1, 22, 8), meal('SEA FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r4' }, { side: 'e', row: 0, to: 'r5' }] },
   lumora: { name: 'LUMORA', kind: 'town', w: 560, h: 300, ground: '#5a5a9a', path: '#b8a8d8', sky: ['#3a2a6a', '#8a6ab0'], deco: 'temple', trees: '#4a4a8a', start: [40, 102],
     b: [['INN', 0, 0, '#4a3a8a', '#d0c8e8', 'inn'], ['TEA HOUSE', 1, 0, '#8a5a9a', '#e8d8f0', 'food'], ['MEDITATION', 2, 0, '#3a6a8a', '#d0e0f0', 'meditate'], ['SPIRIT TEMPLE', 3, 0, '#5a2a8a', '#e8e0f8', 'master'],
-      ['LIBRARY', 4, 0, '#6a4a7a', '#e0d8e8', 'hut', { title: 'LIBRARY', npc: { name: 'SCHOLAR', body: '#6060a0', hair: '#d0d0d0', lines: ['SPIRIT SENSE SHOWS THE FUTURE. BUT ONLY IF YOUR MIND IS STILL.', 'THE MASTER TEACHES A TECHNIQUE THAT LETS YOU CARRY MORE POWER.'] } }],
+      ['LIBRARY', 4, 0, '#6a4a7a', '#e0d8e8', 'hut', { title: 'LIBRARY', npc: { side: 'letter', sideRole: 'to', name: 'SCHOLAR', body: '#6060a0', hair: '#d0d0d0', lines: ['SPIRIT SENSE SHOWS THE FUTURE. BUT ONLY IF YOUR MIND IS STILL.', 'THE MASTER TEACHES A TECHNIQUE THAT LETS YOU CARRY MORE POWER.'] } }],
       ['HOUSE', 0, 1, '#5a5a9a', '#d8d0e8', 'hut', { title: 'MONK HOUSE', npc: { quest: 'lumora', name: 'MONK', body: '#c08040', hair: '#101010', lines: ['BREATHE IN. BREATHE OUT.', 'THE TEMPLE MASTER NEVER RUSHES. HE WAITS. AND HE LIES TO YOUR SENSE.'] } }]],
     people: [PL('MONK', '#c08040', '#101010', 'r0', ['BREATHE IN. BREATHE OUT.', 'STRAIN IS LEARNED BY LISTENING TO YOUR BODY.']), PL('CHILD', '#8060c0', '#202020', 'r1', ['THE LIGHTS ARE SPIRITS!', 'THE MASTER IS SCARY BUT KIND.'], { small: true })],
     signs: [{ x: 30, y: 112, text: 'LUMORA. THE SPIRIT TOWN. SPEAK SOFTLY.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
@@ -2071,12 +2158,59 @@ const TOWNS = {
     signs: [{ x: 30, y: 112, text: 'ORAYA CITY. THE CAPITAL OF YARDRAT.' }],
     meals: [meal('CITY NOODLES', 1, 15, -5), meal('ROYAL STEAK', 1, 26, 10), meal('TOURNAMENT FEAST', 2, 36, 26)], exits: [{ side: 'w', row: 0, to: 'r3' }, { side: 'w', row: 1, to: 'r6' }] }
 };
+
+// ---------- chapter 2 places: forest, waterfall, snow, desert, volcano, harbour, island ----------
+const NPCX = (name, body, hair, lines, extra) => Object.assign({ name, body, hair, lines }, extra || {});
+Object.assign(TOWNS, {
+  elmvale: { name: 'ELMVALE', kind: 'town', w: 560, h: 300, ground: '#3a7a3a', path: '#b89860', sky: ['#3a5a48', '#7aa888'], deco: 'forest', trees: '#2a6a2a', start: [40, 102],
+    b: [['INN', 0, 0, '#5a7a3a', '#d8d0a8', 'inn'], ['HERB SHOP', 1, 0, '#4a8a5a', '#e0e0b8', 'hut', { title: 'HERB SHOP', npc: NPCX('HERBALIST', '#60a060', '#e0e0e0', ['HERBS, ROOTS AND HONEY. SELL ME YOUR FISH AND I GIVE COINS.', 'A GOOD MEAL MAKES A FIGHTER STRONG FOR A DAY.'], { shop: true }) }],
+      ['TREE HOUSE', 2, 0, '#6a4a2a', '#c8a070', 'hut', { title: 'TREE HOUSE', npc: NPCX('CARPENTER', '#a07040', '#402010', ['THE TREES HERE ARE OLDER THAN ORAYA CITY.', 'ELMVALE IS QUIET. THE FOREST TALKS IF YOU LISTEN.'], { side: 'treehouse' }) }], ['SOUP HOUSE', 3, 0, '#8a6a3a', '#e0d0a8', 'food']],
+    people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['THE DEEP WOODS ROAD IS DARK BUT SAFE.', 'THERE ARE SECRET PATHS HERE. USE SPIRIT SENSE.']), PL('GIRL', '#e0a040', '#402010', 'r1', ['I FOUND A GLOWING MUSHROOM!', 'THE HERBALIST PAYS FOR FISH.'], { small: true })],
+    signs: [{ x: 30, y: 112, text: 'ELMVALE. THE FOREST VILLAGE. EAST: THE DEEP WOODS ROAD TO TAVORA.' }], meals: [meal('MUSHROOM SOUP', 1, 12, -12), meal('FOREST STEW', 1, 22, 6), meal('WOODLAND FEAST', 2, 33, 20)], exits: [{ side: 'e', row: 0, to: 'r10' }] },
+  silverfall: { name: 'SILVERFALL', kind: 'town', w: 560, h: 300, ground: '#4a9a6a', path: '#c8c0a0', sky: ['#3a6a9a', '#9ac8e8'], deco: 'falls', trees: '#2a8a4a', start: [40, 102],
+    b: [['INN', 0, 0, '#3a7a8a', '#d8e0d8', 'inn'], ['MILL', 1, 0, '#8a6a3a', '#d8c8a0', 'hut', { title: 'WATER MILL', npc: NPCX('MILLER', '#b08040', '#e0e0e0', ['THE FALL TURNS MY MILL. NO WATER, NO FLOUR.', 'THE WATER COMES FROM THE SNOW ROADS IN THE NORTH.'], { side: 'fall' }) }],
+      ['FISH GRILL', 2, 0, '#c07a30', '#e8d8b0', 'food'], ['SHRINE', 3, 0, '#5a6aa0', '#e0e0f0', 'hut', { title: 'WATERFALL SHRINE', npc: NPCX('PRIEST', '#6080c0', '#f0f0f0', ['STAND UNDER THE FALL. IT TEACHES PATIENCE.', 'MANY FIGHTERS CAME HERE. FEW STAYED UNDER IT.'], {}) }]],
+    people: [PL('FISHER', '#4080c0', '#402010', 'r0', ['THE FALL IS 40 METERS HIGH!', 'SILVER FISH LIVE ABOVE IT.']), PL('KID', '#40a060', '#202020', 'r1', ['I JUMPED IN THE POOL!', 'THE SPRAY IS COLD.'], { small: true })],
+    signs: [{ x: 30, y: 112, text: 'SILVERFALL. THE WATERFALL VILLAGE. EAST: THE SNOW ROAD.' }], meals: [meal('RIVER SKEWER', 1, 12, -10), meal('SILVER STEW', 1, 22, 8), meal('FALLS FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r7' }, { side: 'e', row: 0, to: 'r8' }] },
+  frosthaven: { name: 'FROSTHAVEN', kind: 'town', w: 560, h: 300, ground: '#dfe8ee', path: '#a8b8c8', sky: ['#7a9ac0', '#d8e8f4'], deco: 'snow', trees: '#88a8a0', start: [40, 102],
+    b: [['INN', 0, 0, '#5a7aa0', '#e8eef4', 'inn'], ['WARM HALL', 1, 0, '#c07050', '#f0e0d0', 'food'], ['WELL HOUSE', 2, 0, '#6a7a90', '#dce4ec', 'hut', { title: 'WELL HOUSE', npc: NPCX('VILLAGER', '#8090b0', '#e8e8e8', ['THE WELL FROZE. WE MELT SNOW FOR WATER.', 'THE COLD SLOWS YOUR BODY. EAT WELL.'], { side: 'well' }) }],
+      ['FUR SHOP', 3, 0, '#8a5a3a', '#e8d8c0', 'hut', { title: 'FUR SHOP', npc: NPCX('FURRIER', '#a07050', '#301810', ['FUR KEEPS YOU WARM. FISH KEEPS ME FED.', 'I BUY FISH AND SELL ROOTS.'], { shop: true }) }]],
+    people: [PL('SKIER', '#4060c0', '#201810', 'r0', ['THE SNOW ROAD IS FAST DOWNHILL!', 'THE NORTH IS NOT ON ANY MAP.']), PL('DOG', '#f0f0f0', '#f0f0f0', 'r1', ['WOOF!'], { dog: true })],
+    signs: [{ x: 30, y: 112, text: 'FROSTHAVEN. THE SNOW TOWN. THE ROAD BACK IS WEST.' }], meals: [meal('HOT CIDER', 1, 8, -18), meal('SNOW STEW', 1, 24, 8), meal('WINTER FEAST', 2, 36, 26)], exits: [{ side: 'w', row: 0, to: 'r8' }] },
+  sunkara: { name: 'SUNKARA', kind: 'town', w: 560, h: 300, ground: '#d8b860', path: '#c8a060', sky: ['#c08040', '#f0d090'], deco: 'desert', trees: '#6a9a3a', start: [40, 102],
+    b: [['INN', 0, 0, '#c07a40', '#ecd8a8', 'inn'], ['OASIS TEA', 1, 0, '#3a8a7a', '#e0e8d0', 'food'], ['CARAVAN', 2, 0, '#a05030', '#e0c090', 'hut', { title: 'CARAVAN TENT', npc: NPCX('CARAVAN LEADER', '#c08030', '#402010', ['WE CROSS THE DUNES EVERY WEEK.', 'SAND SLOWS YOU. TRAVEL AT NIGHT.'], { side: 'parcel', sideRole: 'from' }) }],
+      ['BAZAAR', 3, 0, '#a04060', '#e8d8b8', 'hut', { title: 'BAZAAR', npc: NPCX('BAZAAR MERCHANT', '#c08050', '#201008', ['SPICES, ROOTS, HONEY! I BUY FISH TOO.', 'THE DESERT MAKES EVERYTHING EXPENSIVE.'], { shop: true }) }]],
+    people: [PL('NOMAD', '#c0a060', '#302010', 'r0', ['THE OASIS NEVER DRIES.', 'THE LAVA ROAD IS EAST. IT IS HOT!']), PL('CAMEL', '#c8a870', '#c8a870', 'r1', ['GRRR.', 'HRMPH.'], { dog: true })],
+    signs: [{ x: 30, y: 112, text: 'SUNKARA. THE DESERT VILLAGE. EAST: THE LAVA ROAD TO EMBERPEAK.' }], meals: [meal('DATE BREAD', 1, 12, -6), meal('DESERT STEW', 1, 22, 10), meal('CARAVAN FEAST', 2, 34, 24)], exits: [{ side: 'w', row: 0, to: 'r9' }, { side: 'e', row: 0, to: 'r13' }] },
+  emberpeak: { name: 'EMBERPEAK', kind: 'town', w: 560, h: 300, ground: '#5a4a48', path: '#8a6a58', sky: ['#5a2a2a', '#c86a3a'], deco: 'volcano', trees: '#3a3a3a', start: [40, 102],
+    b: [['INN', 0, 0, '#8a4a3a', '#d8c0a8', 'inn'], ['FORGE HALL', 1, 0, '#802a2a', '#c8a898', 'hut', { title: 'FORGE HALL', npc: NPCX('SMELTER', '#a04030', '#101010', ['THE BRIDGE OVER THE LAVA CRACKED.', 'THE MOUNTAIN BREATHES. LISTEN.'], { side: 'lava' }) }],
+      ['ELDER HOUSE', 2, 0, '#6a3a2a', '#d0b8a0', 'hut', { title: 'FIRE ELDER HOUSE', npc: NPCX('FIRE ELDER', '#c05030', '#e8e8e8', ['A FIGHTER IS LIKE A FLAME. FEED IT, BUT DO NOT SMOTHER IT.', 'THE SPICES FROM SUNKARA MAKE THE BEST STEW.'], { side: 'parcel', sideRole: 'to' }) }], ['SPICE STALL', 3, 0, '#c07030', '#e8d0a0', 'food']],
+    people: [PL('MINER', '#805040', '#101010', 'r0', ['THE CRATER GLOWS AT NIGHT.', 'THE HEAT MAKES YOU TIRED FAST.']), PL('KID', '#c05030', '#202020', 'r1', ['I WANT TO SEE THE LAVA!', 'MY DAD SAYS NO.'], { small: true })],
+    signs: [{ x: 30, y: 112, text: 'EMBERPEAK. THE VOLCANO TOWN. WEST: THE LAVA ROAD.' }], meals: [meal('EMBER BREAD', 1, 12, -4), meal('LAVA STEW', 1, 24, 12), meal('VOLCANO FEAST', 2, 36, 28)], exits: [{ side: 'w', row: 0, to: 'r13' }] },
+  portnavis: { name: 'PORT NAVIS', kind: 'town', w: 560, h: 330, ground: '#6a9a8a', path: '#d0c8a8', sky: ['#4a80b8', '#a8d8f0'], deco: 'sea', trees: '#3a9a6a', start: [40, 102], deep: true,
+    water: [0, 250, 560, 330], dock: { x: 300, y: 262, wx: 300, wy: 292 },
+    b: [['INN', 0, 0, '#3a6a9a', '#d8d8c8', 'inn'], ['HARBOR MASTER', 1, 0, '#2a5a8a', '#d0d8e0', 'hut', { title: 'HARBOR OFFICE', npc: NPCX('HARBOR MASTER', '#2060a0', '#303030', ['SHIPS COME FROM ALL OVER YARDRAT.', 'THE FERRY TO SUNSET ISLE LEAVES WHEN YOU ARE READY.'], { side: 'harbor' }) }],
+      ['SEA DINER', 2, 0, '#c07a30', '#ecdcc0', 'food'], ['SHIP MARKET', 3, 0, '#a04060', '#e0d0b8', 'hut', { title: 'SHIP MARKET', npc: NPCX('SHIPMATE', '#c08030', '#403020', ['I BUY FISH FOR THE SHIPS. FAIR PRICES!', 'SPICES AND ROOTS, FRESH FROM THE HOLD.'], { shop: true }) }], ['LIGHTHOUSE', 4, 0, '#8a3a3a', '#e8e0d0', 'hut', { title: 'LIGHTHOUSE', npc: NPCX('KEEPER', '#606080', '#d0d0d0', ['I SEE FAR FROM UP HERE. A STORM IS COMING.', 'THE ISLANDS TO THE EAST ARE BEAUTIFUL.'], {}) }]],
+    people: [PL('SAILOR', '#3060a0', '#e0e0e0', 'r0', ['THE SEA NEVER SLEEPS.', 'DEEP WATER, BIG FISH.']), PL('GULL', '#f0f0f0', '#f0f0f0', 'r1', ['SQUAWK!'], { dog: true })],
+    signs: [{ x: 30, y: 112, text: 'PORT NAVIS. THE HARBOUR. EAST: THE FERRY PATH TO SUNSET ISLE.' }], meals: [meal('FISH ROLL', 1, 12, -8), meal('SAILOR STEW', 1, 24, 10), meal('HARBOR FEAST', 2, 36, 26)], exits: [{ side: 'w', row: 0, to: 'r11' }, { side: 'e', row: 0, to: 'r12' }] },
+  sunsetisle: { name: 'SUNSET ISLE', kind: 'town', w: 560, h: 330, ground: '#88c86a', path: '#f0d898', sky: ['#c86a5a', '#f8c890'], deco: 'sea', trees: '#4aaa4a', start: [40, 102], deep: true,
+    water: [0, 250, 560, 330], dock: { x: 300, y: 262, wx: 300, wy: 292 },
+    b: [['INN', 0, 0, '#c07050', '#f0e0c0', 'inn'], ['BEACH HUT', 1, 0, '#3a9a8a', '#f0e8d0', 'hut', { title: 'BEACH HUT', npc: NPCX('BEACHCOMBER', '#c09040', '#302010', ['I FOUND A BOTTLE WITH A SEALED NOTE.', 'THE SUN NEVER REALLY SETS HERE.'], { side: 'bottle' }) }], ['COCONUT BAR', 2, 0, '#c04070', '#f0d8c8', 'food']],
+    people: [PL('SURFER', '#40a0c0', '#c0a040', 'r0', ['THE WAVES ARE PERFECT!', 'A LOST FIGHTER LIVES ON THE FAR BEACH.']), PL('CRAB', '#e05040', '#e05040', 'r1', ['CLICK CLICK!'], { dog: true })],
+    signs: [{ x: 30, y: 112, text: 'SUNSET ISLE. THE END OF THE FERRY PATH.' }], meals: [meal('COCONUT', 1, 8, -14), meal('GRILLED FISH', 1, 24, 6), meal('ISLAND FEAST', 2, 36, 22)], exits: [{ side: 'w', row: 0, to: 'r12' }] } });
+TOWNS.tavora.exits.push({ side: 'w', row: 1, to: 'r10' }); TOWNS.keshin.exits.push({ side: 'e', row: 1, to: 'r9' }); TOWNS.mirakai.exits.push({ side: 'e', row: 1, to: 'r7' }); TOWNS.oraya.exits.push({ side: 'e', row: 0, to: 'r11' });
+Object.assign(GATE_INTO, { elmvale: 1, silverfall: 2, sunkara: 3, portnavis: 3, emberpeak: 4, frosthaven: 4, sunsetisle: 4 });
 // roads: a long trail with two travellers. west/east = the places at each end.
 const ROUTE_DEF = { r1: ['EAST ROAD', 'forest', 'tavora', '#3a7a3a', '#8a7a52', 1], r2: ['FARM ROAD', 'tavora', 'keshin', '#6a9a3a', '#b8a070', 2], r3: ['STONE ROAD', 'keshin', 'oraya', '#7a7a70', '#a89880', 3],
   r4: ['SOUTH ROAD', 'village', 'mirakai', '#4a8a5a', '#c8b888', 4], r5: ['LAKE ROAD', 'mirakai', 'lumora', '#5a6a9a', '#b0a8c8', 5], r6: ['SPIRIT ROAD', 'lumora', 'oraya', '#5a4a8a', '#b8a8d0', 6] };
 const ROUTE_TALK = { r1: [['WANDERER', '#607080', 'THE FOREST HIDES BANDITS. YOU DEALT WITH THEM? GOOD.'], ['CART DRIVER', '#a08040', 'TAVORA IS JUST AHEAD. BREAD AND STEW!']], r2: [['FARMHAND', '#a08040', 'KESHIN IS BEHIND THE HILLS. BRING FOOD.'], ['PILGRIM', '#8060a0', 'I WALK TO LUMORA. THEY SAY THE MASTER TEACHES ANYONE WHO CAN LISTEN.']],
   r3: [['MINER', '#707890', 'THE CITY BUYS OUR STONE. THE ARENA IS BUILT OF IT!'], ['SOLDIER', '#a04030', 'ONLY STRONG FIGHTERS ENTER ORAYA CITY.']], r4: [['FISHERMAN', '#4080c0', 'MIRAKAI HAS A DEEP DOCK. BRING A STRONG BODY.'], ['CHILD', '#40a060', 'THE LAKE IS SO BIG!']],
   r5: [['MONK', '#c08040', 'THE TEMPLE HAS A MASTER WHO CANNOT BE HURRIED.'], ['TRAVELLER', '#607080', 'THE LIGHTS OF LUMORA ARE SPIRITS.']], r6: [['GUARD', '#a04030', 'THE CITY IS CLOSE. THE ARENA CHAMPION IS PROUD.'], ['SCHOLAR', '#6060a0', 'SOMETHING STIRS ON YARDRAT. I FEEL IT.']] };
+Object.assign(ROUTE_DEF, { r7: ['CLIFF ROAD', 'mirakai', 'silverfall', '#5a8a5a', '#c0b088', 7], r8: ['SNOW ROAD', 'silverfall', 'frosthaven', '#dfe8ee', '#a8b8c8', 8], r9: ['DUNE ROAD', 'keshin', 'sunkara', '#d8b860', '#c09848', 9], r10: ['DEEP WOODS ROAD', 'elmvale', 'tavora', '#2a5a2a', '#8a7048', 10],
+  r11: ['HARBOR ROAD', 'oraya', 'portnavis', '#4a8a6a', '#c8b888', 11], r12: ['FERRY PATH', 'portnavis', 'sunsetisle', '#5aaa88', '#d8c898', 12], r13: ['LAVA ROAD', 'sunkara', 'emberpeak', '#6a4a3a', '#8a6a58', 13] });
+Object.assign(ROUTE_TALK, { r7: [['HIKER', '#607080', 'THE CLIFF ROAD HAS A GREAT VIEW OF THE FALL.'], ['GOAT HERDER', '#a08040', 'MY GOATS CLIMB BETTER THAN YOU.']], r8: [['SKIER', '#4060c0', 'THE SNOW ROAD! WATCH YOUR STEP.'], ['TRAPPER', '#806040', 'THE COLD SLOWS YOUR BODY. KEEP MOVING.']],
+  r9: [['NOMAD', '#c0a060', 'THE DUNES MOVE. THE ROAD MOVES WITH THEM.'], ['CAMEL DRIVER', '#a08040', 'WATER IS WORTH MORE THAN GOLD OUT HERE.']], r10: [['WOODCUTTER', '#a06030', 'THE DEEP WOODS HIDE MANY SECRETS.'], ['HERBALIST', '#60a060', 'MOUNTAIN HERBS GROW OFF THE ROAD.']],
+  r11: [['CART DRIVER', '#a08040', 'PORT NAVIS IS A BUSY PLACE.'], ['SAILOR', '#3060a0', 'I SMELL THE SEA ALREADY.']], r12: [['FISHER', '#4080c0', 'THE FERRY PATH IS A SANDBAR. LOW TIDE ONLY.'], ['CHILD', '#40a060', 'ARE WE AT THE ISLAND YET?']], r13: [['SMELTER', '#a04030', 'THE LAVA ROAD IS HOT. DRINK WATER.'], ['PILGRIM', '#8060a0', 'THE FIRE ELDER KNOWS OLD STORIES.']] });
 Object.keys(ROUTE_DEF).forEach(k => {
   const d = ROUTE_DEF[k];
   TOWNS[k] = { name: d[0], kind: 'route', w: 560, h: 200, ground: d[3], path: d[4], sky: ['#3a3a6a', '#7a6a9a'], deco: 'route', trees: '#2f6a3a', minY: 60, streets: [[92, 116]], start: [30, 104], seed: d[5] * 17,
@@ -2084,6 +2218,10 @@ Object.keys(ROUTE_DEF).forEach(k => {
     people: ROUTE_TALK[k].map((tk, i) => PL(tk[0], tk[1], '#402010', 'r0', [tk[2], 'THE ROAD IS LONG. WALK WELL.'])),
     signs: [{ x: 22, y: 126, text: 'WEST: ' + (d[1] === 'village' ? 'SORYA VILLAGE' : d[1] === 'forest' ? 'THE FOREST' : TOWNS[d[1]] ? TOWNS[d[1]].name : d[1].toUpperCase()) + '.' }, { x: 538, y: 126, text: 'EAST: ' + (d[2] === 'village' ? 'SORYA VILLAGE' : d[2].toUpperCase()) + '.' }] };
 });
+const BRANCHES = { r2: [{ x: 200, end: 262, kind: 'chest', id: 'r2a' }, { x: 430, end: 262, kind: 'camp', id: 'r2b' }], r3: [{ x: 300, end: 262, kind: 'hidden', id: 'sc_r3' }], r4: [{ x: 330, end: 262, kind: 'chest', id: 'r4a' }],
+  r5: [{ x: 280, end: 262, kind: 'cave', id: 'r5cave' }, { x: 440, end: 262, kind: 'camp', id: 'r5b' }], r6: [{ x: 320, end: 262, kind: 'hidden', id: 'sc_r6' }, { x: 140, end: 262, kind: 'chest', id: 'r6a' }], r7: [{ x: 300, end: 262, kind: 'chest', id: 'r7a' }],
+  r9: [{ x: 260, end: 262, kind: 'camp', id: 'r9a' }], r10: [{ x: 300, end: 262, kind: 'hidden', id: 'sc_r10' }, { x: 120, end: 262, kind: 'chest', id: 'r10a' }], r11: [{ x: 250, end: 262, kind: 'chest', id: 'r11a' }], r13: [{ x: 300, end: 262, kind: 'camp', id: 'r13a' }] };
+Object.keys(BRANCHES).forEach(k => { TOWNS[k].h = 300; TOWNS[k].branches = BRANCHES[k]; });
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2092,7 +2230,7 @@ Object.keys(TOWNS).forEach(k => {
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
   const n = T.kind === 'route' ? 90 : 40;
-  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? (y > 84 && y < 130) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > 84 && y < 130) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
 });
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village';
 const southOpen = () => !!(saveData && saveData.wins > 0);
@@ -2104,6 +2242,7 @@ function townTarget() {
   for (let i = 0; i < T.bl.length; i++) { const b = T.bl[i]; if (vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22) return 't:' + i; }
   if (T.dock && Math.hypot(vx - T.dock.x, vy - T.dock.y) < 26) return 'fish';
   const si = (T.signs || []).findIndex(s => Math.hypot(vx - s.x, vy - s.y) < 22); if (si >= 0) return 't:s' + si;
+  const bi = (T.branches || []).findIndex(b => Math.hypot(vx - b.x, vy - (b.end - 8)) < 28); if (bi >= 0) return 't:o' + bi;
   return vNearPerson() >= 0 ? 'person' : null;
 }
 function townSolid(x, y) {
@@ -2116,6 +2255,7 @@ function townSolid(x, y) {
 function townInfo(tg) {
   const T = TOWNS[area];
   if (tg[2] === 's') return ['READ THE SIGN', ''];
+  if (tg[2] === 'o') { const o = T.branches[+tg.slice(3)], f = (saveData.found || {})[o.id]; return ({ chest: [f ? 'EMPTY CHEST' : 'OPEN THE CHEST', f ? 'YOU TOOK EVERYTHING.' : 'SOMETHING IS INSIDE.'], camp: ['THE CAMP FIRE', 'REST OR COOK.'], cave: ['ENTER THE CAVE', 'MOONSTONE CAVE.'], hidden: [f ? 'THE SECRET PASS' : 'A DEAD END...', f ? 'A SHORTCUT ON THE MAP.' : 'THE BUSHES LOOK ODD.'] })[o.kind]; }
   const b = T.bl[+tg.slice(2)], t = trainOf();
   return ({ inn: ['THE INN', 'STRAIN -40. COSTS TIME.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
 }
@@ -2157,6 +2297,7 @@ function duelAfter(win) {
 function townAct(tg) {
   const T = TOWNS[area], t = trainOf();
   if (tg[2] === 's') { const s = T.signs[+tg.slice(3)]; sfx('ok'); vTalk = s.text; say(vTalk); return; }
+  if (tg[2] === 'o') { spotAct(T.branches[+tg.slice(3)]); return; }
   const b = T.bl[+tg.slice(2)];
   if (b.role === 'inn') restNow();
   else if (b.role === 'food') { sfx('ok'); openFoodMenu(); }
@@ -2165,6 +2306,78 @@ function townAct(tg) {
   else if (b.role === 'meditate') meditateNow();
   else if (b.role === 'master') duelStart('master');
   else if (b.role === 'rival') duelStart('rival');
+}
+// ---------- spots on the roads: chests, camps, a cave and hidden passes ----------
+function foundOf() { trainOf(); return saveData.found || (saveData.found = {}); }
+function lootFor(id) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0; const ks = Object.keys(ING), a = ks[Math.abs(h) % 3], b = ks[Math.abs(h >> 3) % 3]; const o = { ing: {}, coins: 8 + Math.abs(h) % 20 }; o.ing[a] = 1; o.ing[b] = (o.ing[b] | 0) + 1; return o; }
+function openChest(id, big) {
+  const t = trainOf(), f = foundOf(); if (f[id]) { sfx('bad'); vTalk = 'THE CHEST IS EMPTY.'; say(vTalk); return; }
+  const o = lootFor(id); if (big) { o.coins += 30; o.ing.herb = (o.ing.herb | 0) + 1; }
+  f[id] = 1; const bits = gainBits(t, o); trSave(); sfx('win'); vFlash = .3; say2('YOU OPEN THE CHEST!', 'YOU GOT: ' + bits.slice(0, -1) + '.');
+}
+function campAct(b) {
+  const t = trainOf(); sfx('ok'); vTalk = 'A CAMP FIRE CRACKLES. WHAT DO YOU DO?'; say(vTalk);
+  vAfterTalk = () => { vChoice = { idx: 0, opts: ['REST (FREE, ONCE A DAY)', 'COOK A DISH (1 TIME)', 'LEAVE'], pick: i => {
+    if (i === 0) { const cd = saveData.campDay || (saveData.campDay = {}); if (cd[b.id] === t.day) { sfx('bad'); vTalk = 'YOU ALREADY RESTED HERE TODAY.'; say(vTalk); return; } cd[b.id] = t.day; t.fatigue = Math.max(0, t.fatigue - 25); trSave(); sfx('ok'); vFlash = .3; vTalk = 'YOU REST BY THE FIRE. STRAIN -25.'; say(vTalk); }
+    else if (i === 1) openCook(); }, no: '' }; };
+}
+function spotAct(b) {
+  const t = trainOf(), f = foundOf();
+  if (b.kind === 'chest') openChest(b.id, false);
+  else if (b.kind === 'camp') campAct(b);
+  else if (b.kind === 'cave') { hutReturn = { area, x: b.x, y: b.end + 12 }; sfx('ok'); enterRoom('cave'); }
+  else if (f[b.id]) { sfx('ok'); vTalk = 'THE SECRET PASS IS OPEN. IT IS A SHORTCUT ON THE MAP.'; say(vTalk); }
+  else {
+    t.fatigue = Math.min(99, t.fatigue + 2);
+    if (t.focus >= 5) { f[b.id] = 1; trSave(); sfx('win'); vFlash = .4; vTalk = 'SPIRIT SENSE: THE BUSHES ARE NOT REAL! A SECRET PASS OPENS. (SHORTCUT ON THE MAP)'; }
+    else { trSave(); sfx('warn'); vTalk = 'A DEAD END. YOU SENSE SOMETHING, BUT YOUR FOCUS IS TOO LOW. (FOCUS 5, STRAIN +2)'; }
+    say(vTalk);
+  }
+}
+function touchStone() {
+  const t = trainOf(), f = foundOf();
+  if (f.stone) { sfx('ok'); vTalk = 'THE MOONSTONE GLOWS SOFTLY. YOUR MIND IS CALM.'; say(vTalk); return; }
+  f.stone = 1; const gain = t.focus < statCapOf('focus'); if (gain) t.focus++; t.fatigue = Math.max(0, t.fatigue - 20); trSave(); sfx('win'); vFlash = .5; say2('YOU TOUCH THE MOONSTONE. THE CAVE HUMS.', (gain ? 'FOCUS +1, ' : 'FOCUS AT CAP, ') + 'STRAIN -20.');
+}
+// ================= the day changes the world (visitors) + people who remember what you did =================
+const DAY_EVENTS = [
+  { kind: 'monk', name: 'WANDERING MONK', body: '#c08040', hair: '#101010', note: 'A WANDERING MONK SITS BY THE PATH.', lines: ['SOME ROADS HIDE A SECRET PASS. LOOK AT DEAD ENDS WITH A CALM MIND.', 'THERE IS A CAVE ON THE LAKE ROAD. THE STONE INSIDE GLOWS.', 'CAMPS ARE FREE TO REST IN. ONCE A DAY.'] },
+  { kind: 'peddler', name: 'PEDDLER', body: '#a06040', hair: '#503020', shop: true, note: 'A PEDDLER SETS UP A STALL.', lines: ['ROOTS, HERBS AND HONEY! SELL ME YOUR FISH!', 'I TRAVEL EVERY ROAD. NEW DAY, NEW STALL.'] },
+  { kind: 'bard', name: 'BARD', body: '#8060c0', hair: '#f0d040', note: 'A BARD SINGS IN THE VILLAGE.', lines: ['LA LA LA! THE TWO SAIYANS RODE AT DAWN!'] },
+  { kind: 'challenger', name: 'CHALLENGER', body: '#c04030', hair: '#101010', note: 'A YOUNG CHALLENGER WANTS A SPAR.', lines: ['I WANT TO FIGHT THE ONE WHO BEAT THE BANDITS!'] }];
+const EVENT_NPC = {}; DAY_EVENTS.forEach(e => { EVENT_NPC[e.kind] = { name: e.name, ev: e.kind, shop: e.shop, body: e.body, hair: e.hair, x: 210, y: 178, face: -1, step: 0, line: 0, lines: e.lines }; });
+function dayEvent() { return DAY_EVENTS[trainOf().day % 4]; }
+function dayPeople() { const e = dayEvent(); return [EVENT_NPC[e.kind]]; }
+function eventTalk(p) {
+  const t = trainOf(); saveData.evDay = saveData.evDay || {};
+  if (p.ev === 'peddler') { shopTalk(p); return; }
+  if (p.ev === 'bard') {
+    sfx('ok'); if (saveData.evDay.bard === t.day) { vTalk = 'BARD: LA LA! THE SONG IS OVER FOR TODAY.'; } else { saveData.evDay.bard = t.day; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('win'); vFlash = .3; vTalk = 'BARD: LA LA LA! (THE SONG CALMS YOU. STRAIN -10)'; }
+    say(vTalk); return;
+  }
+  if (p.ev === 'challenger') {
+    if (saveData.evDay.ch === t.day) { sfx('ok'); vTalk = 'CHALLENGER: GOOD FIGHT! COME BACK ANOTHER DAY.'; say(vTalk); return; }
+    sfx('ok'); offerQuest('CHALLENGER: SPAR WITH ME! IT COSTS TIME, BUT WE BOTH GET STRONGER.', () => {
+      if (t.sessions <= 0) { sfx('bad'); vTalk = 'CHALLENGER: IT IS NIGHT. TOMORROW!'; say(vTalk); return; }
+      const names = ['body', 'ki', 'focus'], low = names.filter(k => t[k] < statCapOf(k)).sort((a, c) => t[a] - t[c])[0];
+      t.sessions--; t.fatigue = Math.min(99, t.fatigue + 8); if (low) t[low]++; saveData.evDay.ch = t.day; trSave(); sfx('win'); vFlash = .3;
+      say2('YOU SPAR HARD. THE CHALLENGER BOWS.', (low ? low.toUpperCase() + ' +1, ' : 'ALL STATS AT CAP, ') + 'STRAIN +8, 1 TIME SLOT.');
+    }, 'CHALLENGER: MAYBE LATER THEN.'); return;
+  }
+  sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; say(vTalk);
+}
+const MEM = {
+  GIRL: [[() => saveData.wins > 0, 'I HEARD YOU BEAT ROKU! EVERYONE TALKS ABOUT IT.']], GUEST: [[() => (saveData.cooked | 0) > 0, 'YOU SMELL LIKE A WARRIOR PLATE. WHO COOKED?']],
+  FARMER: [[() => (saveData.sold | 0) > 0, 'YOU SELL FISH NOW? SMART!'], [() => sideFlag('crate') === 'blast', 'YOU BLEW UP A BARN DOOR IN TAVORA? HA!']],
+  KID: [[() => (saveData.fishTog | 0) > 0, 'YOU FISH WITH FRIENDS? TAKE ME NEXT TIME!']], GUARD: [[() => milestones() >= 3, 'THREE MILESTONES? YOU MAY PASS ANYWHERE.']],
+  MINER: [[() => sideFlag('dispute') === 'lie', 'YOU TOOK THE MINER SIDE IN THE LIFT FIGHT. THE SMITH IS SULKING.'], [() => sideFlag('dispute') === 'truth', 'THE RUSTY CHAIN! EVERYONE KNOWS YOU FOUND IT.']],
+  FISHER: [[() => (saveData.sold | 0) > 0, 'FISH SELL WELL IN TOWN. ASK THE MERCHANTS.']], MONK: [[() => (saveData.meditations | 0) >= 3, 'YOU MEDITATED WELL. THE HALL FEELS CALMER.']],
+  CITIZEN: [[() => !!saveData.rivalDone, 'YOU BEAT THE RIVAL! THE WHOLE CITY TALKS ABOUT IT.']], TRAVELER: [[() => saveData.wins > 0, 'YOU BEAT ROKU? I SAW HIM SMILE. FIRST TIME.']],
+  SAILOR: [[() => sideFlag('harbor') === 'truth', 'THE LABEL MIX-UP! YOU CLEARED OUR NAMES.']], '*': [[() => (saveData.tech || []).length >= 3, 'YOU KNOW SO MANY TECHNIQUES! I SEE A TRUE FIGHTER.']] };
+function npcSay(p) {
+  trainOf(); const rules = (MEM[p.name] || []).concat(MEM['*']).filter(r => r[0]);
+  let text; if (rules.length && p.line % 2 === 0) text = rules[(p.line >> 1) % rules.length][1]; else text = p.lines[p.line % p.lines.length]; p.line++;
+  return (p.dog ? '' : p.name + ': ') + text;
 }
 function fishSpot() { if (TOWNS[area] && TOWNS[area].dock) return TOWNS[area].dock; return { x: DOCK.x, y: DOCK.y, wx: 450, wy: 300 }; }
 function areaLabel(k) { return k === 'village' ? 'SORYA VILLAGE' : k === 'forest' ? 'THE FOREST' : TOWNS[k] ? TOWNS[k].name : k; }
@@ -2186,59 +2399,127 @@ function townExits() {
   T.exits.forEach(e => { const st = T.streets[e.row]; if (vy < st[0] - 8 || vy > st[1] + 8) return; if ((e.side === 'w' && vx <= 5) || (e.side === 'e' && vx >= T.w - 6)) enterArea(e.to, area, e); });
 }
 function fastTravel(key) {
-  const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); return 'IT IS NIGHT. NO TIME TO TRAVEL.'; }
-  t.sessions--; markVisited(key); trSave(); mode = 'village';
+  const t = trainOf(), cost = travelCost(mapCurrent(), key); if (t.sessions <= 0) { sfx('bad'); return 'IT IS NIGHT. NO TIME TO TRAVEL.'; }
+  if (t.sessions < cost) { sfx('bad'); return 'IT IS FAR: ' + cost + ' TIME SLOTS. YOU HAVE ' + t.sessions + '.'; }
+  t.sessions -= cost; markVisited(key); trSave(); mode = 'village';
   if (key === 'village') toPlace('village', 140, 178, 'YOU TRAVEL BACK TO SORYA VILLAGE.'); else { const T = TOWNS[key]; toPlace(key, T.start[0], T.start[1], 'YOU TRAVEL TO ' + T.name + '.'); }
   return '';
 }
-// ---------- the world map ----------
-const MAP_NODES = { village: { n: 'SORYA VILLAGE', x: 58, y: 44 }, tavora: { n: 'TAVORA', x: 58, y: 94 }, keshin: { n: 'KESHIN', x: 58, y: 144 }, mirakai: { n: 'MIRAKAI', x: 196, y: 44 }, lumora: { n: 'LUMORA', x: 196, y: 94 }, oraya: { n: 'ORAYA CITY', x: 130, y: 178 } };
-const MAP_EDGES = [['village', 'tavora'], ['tavora', 'keshin'], ['keshin', 'oraya'], ['village', 'mirakai'], ['mirakai', 'lumora'], ['lumora', 'oraya']];
+// ---------- the world map: a big planet with continents, snow, desert, forest, lakes and orange roads ----------
+const MAPW = 960, MAPH = 640;
+const MAP_NODES = { village: { n: 'SORYA VILLAGE', x: 250, y: 250 }, tavora: { n: 'TAVORA', x: 250, y: 320 }, keshin: { n: 'KESHIN', x: 250, y: 390 }, elmvale: { n: 'ELMVALE', x: 165, y: 320 }, mirakai: { n: 'MIRAKAI', x: 350, y: 250 }, lumora: { n: 'LUMORA', x: 350, y: 320 },
+  oraya: { n: 'ORAYA CITY', x: 340, y: 440 }, silverfall: { n: 'SILVERFALL', x: 450, y: 250 }, frosthaven: { n: 'FROSTHAVEN', x: 570, y: 150 }, sunkara: { n: 'SUNKARA', x: 190, y: 470 }, emberpeak: { n: 'EMBERPEAK', x: 110, y: 520 }, portnavis: { n: 'PORT NAVIS', x: 450, y: 470 }, sunsetisle: { n: 'SUNSET ISLE', x: 610, y: 520 } };
+const MAP_EDGES = [['village', 'tavora'], ['tavora', 'keshin'], ['keshin', 'oraya'], ['village', 'mirakai'], ['mirakai', 'lumora'], ['lumora', 'oraya'], ['elmvale', 'tavora'], ['mirakai', 'silverfall'], ['silverfall', 'frosthaven'], ['keshin', 'sunkara'], ['sunkara', 'emberpeak'], ['oraya', 'portnavis'], ['portnavis', 'sunsetisle']];
+const MAP_SHORTCUTS = [{ id: 'sc_r3', a: 'tavora', b: 'oraya' }, { id: 'sc_r6', a: 'mirakai', b: 'oraya' }, { id: 'sc_r10', a: 'elmvale', b: 'keshin' }];
+function mapShortcuts() { trainOf(); const f = saveData.found || {}; return MAP_SHORTCUTS.filter(sc => f[sc.id]); }
+function mapAllEdges() { return MAP_EDGES.concat(mapShortcuts().map(sc => [sc.a, sc.b])); }
+function travelCost(a, b) { // hops over roads and found shortcuts, 1 to 3 time slots
+  if (a === b) return 0; const E = mapAllEdges(), seen = { [a]: 0 }, q = [a];
+  while (q.length) { const c = q.shift(); if (c === b) break; E.forEach(e => { const o = e[0] === c ? e[1] : e[1] === c ? e[0] : null; if (o && seen[o] === undefined) { seen[o] = seen[c] + 1; q.push(o); } }); }
+  return Math.max(1, Math.min(3, seen[b] === undefined ? 3 : seen[b]));
+}
+let worldImg = null;
+function buildWorldMap() {
+  const cv2 = document.createElement('canvas'); cv2.width = MAPW; cv2.height = MAPH; const g = cv2.getContext('2d');
+  const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  const vnoise = (x, y, sc) => { const fx = x / sc, fy = y / sc, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, sm = t => t * t * (3 - 2 * t); const a = hash(x0, y0), b = hash(x0 + 1, y0), c = hash(x0, y0 + 1), d = hash(x0 + 1, y0 + 1); return (a + (b - a) * sm(tx)) + ((c + (d - c) * sm(tx)) - (a + (b - a) * sm(tx))) * sm(ty); };
+  const fbm = (x, y) => vnoise(x, y, 90) * .5 + vnoise(x, y, 40) * .3 + vnoise(x, y, 16) * .2;
+  const blobs = [[330, 330, 215, 150], [200, 400, 140, 110], [300, 470, 190, 70], [170, 300, 80, 70], [700, 120, 200, 100], [800, 390, 120, 120], [430, 580, 120, 55], [80, 330, 55, 95], [170, 90, 115, 70], [150, 510, 95, 60], [610, 520, 60, 45], [560, 160, 80, 60], [500, 560, 40, 30], [880, 560, 50, 40], [60, 590, 40, 25], [780, 250, 60, 40]];
+  Object.keys(MAP_NODES).forEach(k => blobs.push([MAP_NODES[k].x, MAP_NODES[k].y, 36, 36]));
+  for (let i = 0; i < 26; i++) blobs.push([20 + hash(i, 7) * 920, 20 + hash(i, 9) * 600, 6 + hash(i, 3) * 12, 5 + hash(i, 5) * 9]);
+  const land = (x, y) => { let sc = -9; for (let b = 0; b < blobs.length; b++) { const B = blobs[b], d = Math.sqrt(((x - B[0]) / B[2]) ** 2 + ((y - B[1]) / B[3]) ** 2); if (1 - d > sc) sc = 1 - d; } return sc + (fbm(x, y) - .5) * .75 > .06; };
+  const dist = (x, y, cx, cy) => Math.hypot(x - cx, y - cy);
+  const C = 4, cols = MAPW / C, rows = MAPH / C, L = [];
+  for (let r = 0; r < rows; r++) { L.push([]); for (let c = 0; c < cols; c++) L[r].push(land(c * C + 2, r * C + 2)); }
+  const lakes = [[390, 300, 26, 16], [200, 398, 15, 10], [742, 142, 32, 18], [520, 420, 18, 12], [830, 380, 26, 16]];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = c * C + 2, y = r * C + 2; let col;
+    if (!L[r][c]) { let near = false; for (let dr = -2; dr <= 2 && !near; dr++) for (let dc = -2; dc <= 2; dc++) { const rr = r + dr, cc = c + dc; if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && L[rr][cc]) { near = true; break; } } col = near ? '#48c4dc' : (fbm(x * 2, y * 2) > .62 ? '#2eb0d0' : '#28a6c6'); }
+    else {
+      const n1 = fbm(x + 500, y + 500), n2 = fbm(x + 90, y + 900); col = n1 > .55 ? '#78c848' : '#5cb840';
+      if (dist(x, y, 165, 320) < 75 + n2 * 20 || dist(x, y, 210, 250) < 40 + n2 * 20 || dist(x, y, 100, 90) < 50) col = n1 > .5 ? '#3a9a3a' : '#2f8a34';
+      if (dist(x, y, 380, 450) < 60 + n2 * 30 || dist(x, y, 600, 380) < 110 + n2 * 30 || dist(x, y, 780, 400) < 90 + n2 * 20) col = n1 > .5 ? '#d8a850' : '#c89840';
+      if (dist(x, y, 190, 480) < 80 + n2 * 25) col = n1 > .5 ? '#f0d858' : '#e6c848';
+      if (dist(x, y, 110, 520) < 36 + n2 * 10) col = '#7a5a48';
+      if (dist(x, y, 250, 405) < 40 + n2 * 12 || dist(x, y, 500, 190) < 44 + n2 * 14 || dist(x, y, 470, 130) < 26) col = n1 > .5 ? '#a8a078' : '#948e6c';
+      const snowy = (y < 240 && x > 470) || (y < 150 && x < 300); if (snowy && (250 - y) / 160 + (n2 - .5) * .9 > (x > 470 ? .05 : .15)) col = n1 > .5 ? '#f8fcff' : '#dceaf4';
+      lakes.forEach(k => { if (((x - k[0]) / k[2]) ** 2 + ((y - k[1]) / k[3]) ** 2 < 1) col = '#48c8e8'; });
+    }
+    g.fillStyle = col; g.fillRect(c * C, r * C, C, C);
+  }
+  g.strokeStyle = '#48c8e8'; g.lineWidth = 3; g.beginPath(); g.moveTo(390, 316); g.lineTo(398, 380); g.lineTo(418, 440); g.lineTo(420, 500); g.stroke();
+  g.strokeStyle = '#f0fbff'; g.lineWidth = 3; g.beginPath(); g.moveTo(462, 226); g.lineTo(462, 244); g.stroke();
+  g.fillStyle = '#e04a20'; g.fillRect(104, 506, 12, 8); g.fillStyle = '#ffb030'; g.fillRect(108, 504, 4, 3);
+  return cv2;
+}
 function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
+function mapPathPt(a, b, u) { // a point along the elbow road between two places
+  const A = MAP_NODES[a], B = MAP_NODES[b], hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y), M = hor ? { x: B.x, y: A.y } : { x: A.x, y: B.y };
+  const l1 = Math.hypot(M.x - A.x, M.y - A.y), l2 = Math.hypot(B.x - M.x, B.y - M.y), d = Math.max(0, Math.min(1, u)) * (l1 + l2);
+  return d <= l1 ? { x: A.x + (M.x - A.x) * (l1 ? d / l1 : 0), y: A.y + (M.y - A.y) * (l1 ? d / l1 : 0) } : { x: M.x + (B.x - M.x) * ((d - l1) / (l2 || 1)), y: M.y + (B.y - M.y) * ((d - l1) / (l2 || 1)) };
+}
 function mapYou() { // your real position: in a town, or somewhere along the road between two towns
-  const c = n => ({ x: MAP_NODES[n].x + 34, y: MAP_NODES[n].y });
-  if (area === 'village') return c('village'); if (TOWNS[area] && TOWNS[area].kind === 'town') return c(area);
-  const lerp = (a, b, u) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u });
-  if (area === 'forest') return lerp(c('village'), c('tavora'), .25);
-  if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return lerp(c(a), c(d[2]), (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
-  return c('village');
+  if (area === 'village') return MAP_NODES.village; if (TOWNS[area] && TOWNS[area].kind === 'town') return MAP_NODES[area];
+  if (area === 'forest') return mapPathPt('village', 'tavora', .25);
+  if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return mapPathPt(a, d[2], (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
+  return MAP_NODES.village;
 }
 function mapVisited() { trainOf(); return Object.assign({ village: 1 }, saveData.visited || {}); }
 function toggleMap() {
   if (mode === 'map') { mode = 'village'; sfx('move'); return; }
-  if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice && !ROOMS[area]) { mode = 'map'; mapSel = mapCurrent(); mapMsg = ''; sfx('ok'); }
+  if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice && !ROOMS[area]) { mode = 'map'; mapSel = mapCurrent(); mapMsg = ''; mapZoomOut = false; const c = MAP_NODES[mapSel]; mapCam.x = c.x; mapCam.y = c.y; sfx('ok'); }
 }
-let mapMsg = '';
+let mapMsg = '', mapZoomOut = false; const mapCam = { x: 250, y: 250 };
+function mapKnown() { const vis = mapVisited(); return Object.keys(MAP_NODES).filter(k => vis[k]); }
+function mapXf() {
+  if (mapZoomOut) { const s = Math.min(W / MAPW, 184 / MAPH); return { s, ox: (W - MAPW * s) / 2, oy: 14 + (184 - MAPH * s) / 2 }; }
+  return { s: 1, ox: Math.round(Math.max(W - MAPW, Math.min(0, W / 2 - mapCam.x))), oy: Math.round(Math.max(14 + 184 - MAPH, Math.min(14, 14 + 92 - mapCam.y))) };
+}
+function mapNodeXY(k, xf) { const n = MAP_NODES[k]; return { x: xf.ox + n.x * xf.s, y: xf.oy + n.y * xf.s }; }
 function mapPress(k) {
-  const vis = mapVisited(), list = Object.keys(MAP_NODES).filter(n => vis[n]);
+  const list = mapKnown();
   if (k === 'back') { mode = 'village'; sfx('move'); return true; }
-  if (k === 'left' || k === 'up') { mapSel = list[(list.indexOf(mapSel) + list.length - 1) % list.length]; sfx('move'); }
-  else if (k === 'right' || k === 'down') { mapSel = list[(list.indexOf(mapSel) + 1) % list.length]; sfx('move'); }
-  else if (k === 'ok') {
+  if (k === 'zoom') { mapZoomOut = !mapZoomOut; sfx('move'); return true; }
+  if (k === 'left' || k === 'right' || k === 'up' || k === 'down') {
+    const cur = MAP_NODES[mapSel], dx0 = k === 'left' ? -1 : k === 'right' ? 1 : 0, dy0 = k === 'up' ? -1 : k === 'down' ? 1 : 0; let best = null, bs = 1e9;
+    list.forEach(n => { if (n === mapSel) return; const dx = MAP_NODES[n].x - cur.x, dy = MAP_NODES[n].y - cur.y, along = dx * dx0 + dy * dy0, across = Math.abs(dx * dy0) + Math.abs(dy * dx0); if (along <= 2) return; const sc = Math.hypot(dx, dy) + across * 1.4; if (sc < bs) { bs = sc; best = n; } });
+    if (best) { mapSel = best; sfx('move'); mapMsg = ''; }
+    return true;
+  }
+  if (k === 'ok') {
     if (mapSel === mapCurrent()) { sfx('bad'); mapMsg = 'YOU ARE ALREADY HERE.'; }
     else { const r = fastTravel(mapSel); if (r) mapMsg = r; }
   }
   return true;
 }
 function drawMap() {
-  const vis = mapVisited(), cur = mapCurrent();
-  ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, CW, H); flatBg();
-  center('WORLD MAP', 8, '#ffd040', 2);
-  MAP_EDGES.forEach(e => { const a = MAP_NODES[e[0]], b = MAP_NODES[e[1]], known = vis[e[0]] && vis[e[1]] || vis[e[0]] || vis[e[1]]; ctx.strokeStyle = known ? '#8a7a52' : '#2a2a44'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(a.x + 34, a.y); ctx.lineTo(b.x + 34, b.y); ctx.stroke(); });
-  ctx.lineWidth = 1;
+  const vis = mapVisited(), cur = mapCurrent(), t = trainOf();
+  if (!worldImg) worldImg = buildWorldMap();
+  const tc = MAP_NODES[mapSel]; mapCam.x += (tc.x - mapCam.x) * .35; mapCam.y += (tc.y - mapCam.y) * .35;
+  const xf = mapXf(), s = xf.s;
+  ctx.fillStyle = '#28a6c6'; ctx.fillRect(-OFFX, 0, CW, H);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 14, W, 184); ctx.clip();
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(worldImg, xf.ox, xf.oy, MAPW * s, MAPH * s);
+  const P = k => mapNodeXY(k, xf), lw = mapZoomOut ? 2 : 3;
+  const road = (a, b, col, dash) => { const A = P(a), B = P(b), hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(A.x, A.y); if (hor) ctx.lineTo(B.x, A.y); else ctx.lineTo(A.x, B.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]); };
+  MAP_EDGES.forEach(e => { if (vis[e[0]] || vis[e[1]]) road(e[0], e[1], '#f0a848'); });
+  mapShortcuts().forEach(sc => road(sc.a, sc.b, '#80f0ff', [4, 3]));
   Object.keys(MAP_NODES).forEach(k => {
-    const n = MAP_NODES[k], seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]]));
-    if (!seen && !near) return;
-    const label = seen ? n.n : '???', w = Math.max(56, label.length * 6 + 12), x = n.x + 34 - w / 2, sel = k === mapSel;
-    ctx.fillStyle = seen ? '#1e1e48' : '#14142c'; ctx.fillRect(x, n.y - 9, w, 18);
-    ctx.fillStyle = sel ? '#ffe060' : seen ? '#60a0e0' : '#444466'; ctx.fillRect(x, n.y - 9, w, 2); ctx.fillRect(x, n.y + 7, w, 2); ctx.fillRect(x, n.y - 9, 2, 18); ctx.fillRect(x + w - 2, n.y - 9, 2, 18);
-    textS(label, Math.round(n.x + 34 - textW(label) / 2), n.y - 3, seen ? '#ffffff' : '#666688', 1);
+    const seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]])); if (!seen && !near) return;
+    const q = P(k), sz = mapZoomOut ? 5 : 9, sel = k === mapSel;
+    ctx.fillStyle = '#301010'; ctx.fillRect(Math.round(q.x - sz / 2 - 1), Math.round(q.y - sz / 2 - 1), sz + 2, sz + 2); ctx.fillStyle = seen ? '#e83a3a' : '#888898'; ctx.fillRect(Math.round(q.x - sz / 2), Math.round(q.y - sz / 2), sz, sz);
+    if (sel && Math.floor(time * 3) % 2 === 0) { ctx.strokeStyle = '#ffe060'; ctx.lineWidth = 2; ctx.strokeRect(Math.round(q.x - sz / 2 - 3), Math.round(q.y - sz / 2 - 3), sz + 6, sz + 6); }
+    if (!mapZoomOut && seen) { const lb = MAP_NODES[k].n; textS(lb, Math.round(q.x - textW(lb) / 2), Math.round(q.y + 7), '#ffffff', 1); }
+    if (!seen && !mapZoomOut) textS('?', Math.round(q.x - 2), Math.round(q.y - 3), '#ffffff', 1);
   });
-  { const yp = mapYou(); if (Math.floor(time * 3) % 2 === 0) { ctx.fillStyle = '#000'; ctx.fillRect(yp.x - 4, yp.y - 4, 9, 9); ctx.fillStyle = '#80ff80'; ctx.fillRect(yp.x - 3, yp.y - 3, 7, 7); } textS('YOU', Math.round(yp.x - 9), Math.round(yp.y - 15), '#80ff80', 1); }
-  const t = trainOf(), sel = MAP_NODES[mapSel];
-  textS(sel ? sel.n : '', 10, 206, '#ffe060', 1);
-  textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : (touchMode ? 'TAP' : 'Z') + ': TRAVEL (1 TIME SLOT)  ' + (t.sessions ? '' : 'NIGHT!')), 10, 217, mapMsg ? '#ff8080' : '#c8c8e8', 1);
-  textS(touchMode ? 'TAP A PLACE' : 'ARROWS  X: BACK', 10, 228, '#8888b0', 1);
+  { const yp = mapYou(), q = { x: xf.ox + yp.x * s, y: xf.oy + yp.y * s }; if (Math.floor(time * 3) % 2 === 0) { ctx.fillStyle = '#000'; ctx.fillRect(Math.round(q.x - 4), Math.round(q.y - 4), 9, 9); ctx.fillStyle = '#80ff80'; ctx.fillRect(Math.round(q.x - 3), Math.round(q.y - 3), 7, 7); } textS('YOU', Math.round(q.x - 9), Math.round(q.y - 15), '#80ff80', 1); }
+  ctx.restore();
+  ctx.fillStyle = '#0a0a1c'; ctx.fillRect(0, 0, W, 14); textS('WORLD MAP', 52, 3, '#ffd040', 1); textS(touchMode ? 'TAP: ZOOM' : 'V: ZOOM', W - 6 - textW(touchMode ? 'TAP: ZOOM' : 'V: ZOOM'), 3, '#80e0ff', 1);
+  ctx.fillStyle = '#0a0a1c'; ctx.fillRect(0, 198, W, 42); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 198, W, 2);
+  const cost = mapSel === cur ? 0 : travelCost(cur, mapSel);
+  textS(MAP_NODES[mapSel].n + (vis[mapSel] ? '' : ' (NOT VISITED)'), 8, 204, '#ffe060', 1);
+  textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : vis[mapSel] ? (touchMode ? 'TAP AGAIN' : 'Z') + ': TRAVEL, ' + cost + ' TIME SLOT' + (cost > 1 ? 'S' : '') + (t.sessions < cost ? '  NOT ENOUGH TIME!' : '') : 'WALK THERE FIRST.'), 8, 216, mapMsg ? '#ff8080' : '#c8c8e8', 1);
+  textS(touchMode ? 'TAP A RED SQUARE' : 'X: BACK  V: ZOOM', 8, 228, '#8888b0', 1);
 }
 // ---------- drawing a town or a road ----------
 function drawTown() {
@@ -2254,6 +2535,20 @@ function drawTown() {
   if (T.deco === 'sea' && T.water) { const w = T.water; rr(w[0], w[1], w[2] - w[0], w[3] - w[1], '#2a70b0'); rr(w[0], w[1] + 4, w[2] - w[0], w[3] - w[1] - 8, '#4a90d0'); ctx.fillStyle = '#9ad0f8'; for (let i = 0; i < 26; i++) { const u = (time * .5 + i * .31) % 1; ctx.fillRect((i * 47) % (T.w - 12), w[1] + 12 + (i * 13) % 60 + Math.sin(u * 6.28) * 2, 10, 2); } rr(290, w[1], 20, 62, '#a08850'); ctx.fillStyle = '#8a7040'; for (let y = w[1]; y < w[1] + 62; y += 6) ctx.fillRect(290, y, 20, 1); }
   if (T.deco === 'temple') { for (let i = 0; i < 14; i++) { const u = (time * .2 + i * .17) % 1; ctx.fillStyle = 'rgba(200,180,255,' + (0.35 + 0.35 * Math.sin(u * 6.28)) + ')'; ctx.fillRect(30 + (i * 73) % (T.w - 60), 118 + Math.sin(time + i) * 8 + (i % 4) * 14, 3, 3); } }
   if (T.deco === 'city') { for (let x = 0; x < T.w; x += 24) { ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(x, 92, 1, 22); ctx.fillRect(x, 202, 1, 22); } const fx = T.w / 2; rr(fx - 22, 126, 44, 18, '#8a9ab0'); rr(fx - 18, 122, 36, 10, '#5a8ad0'); rr(fx - 3, 108, 6, 18, '#a0b0c8'); ctx.fillStyle = 'rgba(200,230,255,.8)'; ctx.fillRect(fx - 1 + Math.sin(time * 4) * 2, 104 + (time * 20) % 6, 3, 3); }
+  if (T.deco === 'forest') { for (let i = 0; i < 16; i++) { const u = (time * .3 + i * .21) % 1; ctx.fillStyle = 'rgba(220,255,140,' + (0.3 + 0.4 * Math.sin(u * 6.28)) + ')'; ctx.fillRect(20 + (i * 71) % (T.w - 40), 60 + Math.sin(time * .8 + i) * 10 + (i % 5) * 30, 2, 2); } ctx.fillStyle = 'rgba(0,30,0,.10)'; ctx.fillRect(0, 34, T.w, T.h); }
+  if (T.deco === 'falls') { rr(450, 34, 100, 56, '#6a6a70'); rr(450, 34, 100, 6, '#8a8a90'); rr(474, 34, 44, 58, '#8ad0f0'); ctx.fillStyle = '#e8f8ff'; for (let i = 0; i < 9; i++) { const yy = 34 + ((time * 40 + i * 13) % 58); ctx.fillRect(478 + (i * 11) % 36, yy, 3, 9); } rr(448, 88, 108, 8, '#4a9ad0'); ctx.fillStyle = 'rgba(255,255,255,.5)'; for (let i = 0; i < 8; i++) ctx.fillRect(452 + i * 13 + Math.sin(time * 3 + i) * 3, 90, 6, 2); }
+  if (T.deco === 'snow') { ctx.fillStyle = '#f8fcff'; for (let i = 0; i < 12; i++) ctx.fillRect(10 + i * 46, 30 + (i % 3) * 3, 40, 8); }
+  if (T.deco === 'desert') { ctx.fillStyle = '#ecd078'; for (let i = 0; i < 8; i++) ctx.fillRect(10 + i * 70, 236 + (i % 3) * 12, 60, 10); ctx.fillStyle = '#3a8a3a'; [[60, 240], [300, 250], [470, 238]].forEach(c => { ctx.fillRect(c[0], c[1], 5, 16); ctx.fillRect(c[0] - 4, c[1] + 4, 4, 3); ctx.fillRect(c[0] + 5, c[1] + 7, 4, 3); }); }
+  if (T.deco === 'volcano') { for (let y = 0; y < 34; y++) { const hw = 20 + y * 2; ctx.fillStyle = y < 6 ? '#e85020' : '#4a3a38'; ctx.fillRect(470 - hw, y, hw * 2, 1); } ctx.fillStyle = 'rgba(255,120,40,' + (0.25 + 0.15 * Math.sin(time * 3)) + ')'; ctx.fillRect(0, 34, T.w, 60); ctx.fillStyle = '#ff9040'; for (let i = 0; i < 10; i++) ctx.fillRect(20 + (i * 61) % (T.w - 40), 220 + (i % 4) * 14, 14, 3); }
+  if (T.deco === 'snow') { ctx.fillStyle = 'rgba(255,255,255,.85)'; for (let i = 0; i < 40; i++) ctx.fillRect(camX + (i * 37 + time * 8) % CW, (i * 53 + time * 30) % 196, 2, 2); }
+  (T.branches || []).forEach(b => {
+    rr(b.x - 13, 114, 26, b.end - 110, T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let y = 120; y < b.end; y += 10) ctx.fillRect(b.x - 10 + (y % 3) * 6, y, 3, 2);
+    const f = (saveData.found || {})[b.id], X = b.x, Y = b.end;
+    if (b.kind === 'chest') { rr(X - 12, Y - 14, 24, 14, f ? '#5a4030' : '#8a5a2a'); rr(X - 12, Y - 14, 24, 4, f ? '#7a6040' : '#c09040'); if (!f) rr(X - 2, Y - 10, 4, 5, '#f0d040'); }
+    else if (b.kind === 'camp') { ctx.fillStyle = '#6a4a2a'; for (let i = 0; i < 12; i++) ctx.fillRect(X - 26 + i * 2, Y - 24 + i * 2, 2, 24 - i * 2); ctx.fillStyle = '#c8a870'; ctx.fillRect(X - 26, Y - 2, 30, 2); rr(X + 8, Y - 8, 12, 3, '#4a3a2a'); ctx.fillStyle = Math.floor(time * 6) % 2 ? '#ff8a30' : '#ffd040'; ctx.fillRect(X + 11, Y - 16 - (Math.floor(time * 6) % 2) * 2, 6, 9); ctx.fillStyle = 'rgba(255,200,80,.15)'; ctx.fillRect(X - 6, Y - 30, 44, 34); }
+    else if (b.kind === 'cave') { rr(X - 26, Y - 34, 52, 34, '#5a5a62'); rr(X - 14, Y - 26, 28, 26, '#14101c'); rr(X - 10, Y - 30, 20, 4, '#14101c'); ctx.fillStyle = 'rgba(160,200,255,' + (0.3 + 0.2 * Math.sin(time * 2)) + ')'; ctx.fillRect(X - 3, Y - 12, 6, 8); }
+    else { if (!f) { ctx.fillStyle = '#2a7a2a'; for (let i = 0; i < 6; i++) ctx.fillRect(X - 18 + i * 7, Y - 18 - (i % 2) * 4, 9, 14); ctx.fillStyle = '#3a9a3a'; for (let i = 0; i < 6; i++) ctx.fillRect(X - 16 + i * 7, Y - 20 - (i % 2) * 4, 5, 4); } else { rr(X - 18, Y - 26, 36, 26, '#5a5a62'); rr(X - 10, Y - 20, 20, 20, '#a8d8ff'); ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(X - 6 + Math.sin(time * 2) * 3, Y - 16, 4, 12); } }
+  });
   T.bl.forEach(b => vBuilding(b, b.roof, b.wall, b.label));
   const items = T.trees.filter(t => t.x > camX - 20 && t.x < camX + CW + 20).map(t => ({ y: t.y, draw: () => { vTree(t); if (T.trees && T.deco === 'temple') { ctx.fillStyle = 'rgba(160,140,255,.25)'; ctx.fillRect(t.x - 10, t.y - 30, 20, 20); } } }));
   (T.signs || []).forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
@@ -2288,12 +2583,155 @@ function questTalk(p) {
       if (Q.item) t.inv.splice(t.inv.indexOf(Q.item), 1);
       saveData.quests[id] = 2; saveData.tech = saveData.tech || []; if (saveData.tech.indexOf(Q.tech) < 0) saveData.tech.push(Q.tech); trSave(); sfx('win'); vFlash = .4; vTalk = Q.done;
     } else { sfx('ok'); vTalk = Q.remind; }
-  } else { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; }
+  } else { sfx('ok'); vTalk = npcSay(p); }
   say(vTalk);
 }
 function qMark(p) {
   if (p.role === 'boy') { const st = questOf().step; if (st === 0 || st === 3) textS(st === 3 ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 30, st === 3 ? '#80ff80' : '#ffe060', 2); return; }
+  if (p.side) { const st = sideSt(p.side), to = p.sideRole === 'to'; if (to ? st === 1 : (st === 0 || (st === 1 && SIDES[p.side].opts))) textS(to ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, to ? '#80ff80' : '#ffe060', 2); return; }
   if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
+// ================= mission log + missions without fighting (you choose HOW to solve them) =================
+const SIDES = {
+  crate: { title: 'STUCK CRATE', goal: 'THE FARMHAND IN THE BARN IN TAVORA NEEDS HELP MOVING A CRATE.',
+    ask: 'FARMHAND: A HEAVY CRATE BLOCKS THE BARN DOOR. THE COWS CANNOT GET OUT! CAN YOU HELP?', remind: 'FARMHAND: THE CRATE IS STILL THERE.', how: 'HOW WILL YOU MOVE THE CRATE?',
+    opts: [
+      { n: 'PUSH IT (BODY 5)', need: t => t.body >= 5, low: 'YOU PUSH AND PUSH. IT DOES NOT MOVE. YOU NEED MORE BODY.', ok: 'YOU HEAVE THE CRATE AWAY! THE COWS MOO HAPPILY.', fat: 18, gain: { body: 1 }, flag: 'push' },
+      { n: 'BLAST IT (KI 5)', need: t => t.ki >= 5, low: 'YOUR BLAST ONLY SCORCHES THE CRATE. YOU NEED MORE KI.', ok: 'BOOM! THE CRATE IS GONE. SO IS THE BARN DOOR...', fat: 5, gain: { ki: 1 }, flag: 'blast' },
+      { n: 'GET HELP (1 TIME SLOT)', need: t => t.sessions >= 1, low: 'IT IS NIGHT. NO ONE IS AWAKE TO HELP.', ok: 'YOU FETCH THREE FARMHANDS. THEY FEED YOU A HOT MEAL.', time: 1, meal: 14, flag: 'help' }],
+    after: { push: 'FARMHAND: THE STRONG KID! THE COWS LOVE YOU.', blast: 'FARMHAND: MY DOOR... BUT THE COWS ARE FREE. I GUESS.', help: 'FARMHAND: THANKS FOR GETTING THE OTHERS, FRIEND.' } },
+  dispute: { title: 'BROKEN LIFT', goal: 'THE MINER IN KESHIN FIGHTS WITH THE SMITH OVER A BROKEN LIFT. HELP HIM.',
+    ask: 'MINER: THE SMITH SAYS I BROKE HIS LIFT. I SAY HE DID! TELL US WHO IS RIGHT?', remind: 'MINER: WELL? WHO BROKE THE LIFT?', how: 'WHAT DO YOU TELL THE MINER?',
+    opts: [
+      { n: 'THE SMITH BROKE IT', need: t => true, low: '', ok: 'MINER: HA! I KNEW IT! HAVE SOME TEA, KID.', fat: -15, flag: 'lie' },
+      { n: 'YOU BROKE IT (TRUTH?)', need: t => true, low: '', ok: 'MINER: ...MAYBE I BUMPED IT. HERE, LET ME SHOW YOU HOW TO LIFT.', fat: -5, gain: { body: 1 }, flag: 'honest' },
+      { n: 'CHECK THE LIFT (FOCUS 6)', need: t => t.focus >= 6 && t.sessions >= 1, low: 'YOU CANNOT SENSE ANYTHING. YOU NEED FOCUS 6 AND SOME TIME.', ok: 'YOU SENSE A RUSTY CHAIN. NOBODY IS TO BLAME! BOTH THANK YOU.', time: 1, gain: { focus: 1 }, flag: 'truth' }],
+    after: { lie: 'MINER: THE SMITH STILL HATES ME. THANKS FOR NOTHING... AND TEA.', honest: 'MINER: I TALKED TO THE SMITH. WE ARE OK. MOSTLY.', truth: 'MINER: A RUSTY CHAIN! YOU HAVE SHARP SENSES, KID.' } },
+  letter: { title: 'THE LETTER', goal: 'CARRY THE BOATWRIGHT LETTER FROM MIRAKAI TO THE SCHOLAR IN THE LIBRARY IN LUMORA.', to: true,
+    ask: 'BOATWRIGHT: PLEASE CARRY THIS LETTER TO THE SCHOLAR IN LUMORA. THE LAKE ROAD IS QUIET.', remind: 'BOATWRIGHT: THE LETTER GOES TO THE SCHOLAR IN LUMORA. TAKE THE LAKE ROAD.',
+    doneLine: 'SCHOLAR: A LETTER FROM THE BOATWRIGHT! THANK YOU. HAVE SOME TEA.', fat: -20, gain: { focus: 1 },
+    after: { done: 'BOATWRIGHT: THE SCHOLAR WROTE BACK! HE LENDS ME A BOOK ABOUT BOATS.' } } };
+
+Object.assign(SIDES, {
+  treehouse: { title: 'TREE HOUSE', goal: 'THE CARPENTER IN ELMVALE NEEDS HELP WITH A BROKEN TREE HOUSE.', ask: 'CARPENTER: A STORM BROKE THE PLATFORM OF MY TREE HOUSE. CAN YOU HELP ME?', remind: 'CARPENTER: THE PLATFORM IS STILL BROKEN.', how: 'HOW WILL YOU FIX IT?',
+    opts: [{ n: 'CLIMB AND FIX (BODY 6)', need: t => t.body >= 6, low: 'THE TREE IS TOO STEEP. YOU NEED MORE BODY.', ok: 'YOU CLIMB UP AND HAMMER IT BACK. THE CARPENTER CHEERS.', fat: 15, gain: { body: 1 }, ing: { root: 1 }, flag: 'climb' },
+      { n: 'FIND THE ROT (FOCUS 6)', need: t => t.focus >= 6 && t.sessions >= 1, low: 'YOU CANNOT FIND THE ROTTEN WOOD. YOU NEED FOCUS 6 AND TIME.', ok: 'YOU SENSE THE ROTTEN BEAM AND REPLACE ONLY THAT.', time: 1, gain: { focus: 1 }, ing: { herb: 1 }, flag: 'sense' },
+      { n: 'BURN IT AWAY (KI 6)', need: t => t.ki >= 6, low: 'YOUR KI IS TOO WEAK TO CUT WOOD.', ok: 'YOU CUT THE WOOD WITH A KI BLADE. A LITTLE TOO DEEP.', fat: 5, gain: { ki: 1 }, flag: 'blast' }],
+    after: { climb: 'CARPENTER: THE PLATFORM IS STRONG NOW. THANKS!', sense: 'CARPENTER: YOU FOUND THE ROT FAST. SHARP EYES.', blast: 'CARPENTER: THE CUT IS UGLY, BUT IT HOLDS.' } },
+  fall: { title: 'BLOCKED MILL', goal: 'A LOG BLOCKS THE MILL WHEEL IN SILVERFALL.', ask: 'MILLER: A HUGE LOG STUCK IN MY MILL WHEEL. CAN YOU FREE IT?', remind: 'MILLER: THE WHEEL IS STILL STUCK.', how: 'HOW WILL YOU FREE THE WHEEL?',
+    opts: [{ n: 'LIFT THE LOG (BODY 7)', need: t => t.body >= 7, low: 'THE LOG WILL NOT MOVE. YOU NEED MORE BODY.', ok: 'YOU WADE IN AND LIFT THE LOG. THE WHEEL TURNS!', fat: 25, gain: { body: 1 }, coins: 20, flag: 'lift' },
+      { n: 'BLAST THE LOG (KI 7)', need: t => t.ki >= 7, low: 'YOUR BLAST IS TOO WEAK.', ok: 'BOOM! THE LOG BURSTS. SO DOES A WHEEL SPOKE...', fat: 6, gain: { ki: 1 }, coins: 8, flag: 'blast' },
+      { n: 'WAIT FOR THE FLOOD (1 TIME)', need: t => t.sessions >= 1, low: 'IT IS NIGHT. THE RIVER IS QUIET.', ok: 'THE WATER RISES AND FLOATS THE LOG AWAY. THE MILLER SHARES HONEY.', time: 1, ing: { honey: 1 }, coins: 5, flag: 'wait' }],
+    after: { lift: 'MILLER: WHAT A BACK! THE WHEEL TURNS AGAIN.', blast: 'MILLER: THE WHEEL WOBBLES NOW. BUT IT TURNS.', wait: 'MILLER: PATIENCE PAYS. THE RIVER DID IT.' } },
+  well: { title: 'FROZEN WELL', goal: 'THE WELL IN FROSTHAVEN IS FROZEN SOLID. HELP THE VILLAGER.', ask: 'VILLAGER: OUR WELL IS FROZEN. WE HAVE NO WATER! CAN YOU HELP?', remind: 'VILLAGER: THE WELL IS STILL ICE.', how: 'HOW WILL YOU OPEN THE WELL?',
+    opts: [{ n: 'MELT IT (KI 8)', need: t => t.ki >= 8, low: 'YOUR KI IS TOO COOL. YOU NEED KI 8.', ok: 'YOU MELT THE ICE WITH A WARM KI BLAST. STEAM EVERYWHERE!', fat: 8, gain: { ki: 1 }, ing: { honey: 1 }, flag: 'melt' },
+      { n: 'CHIP IT (BODY 8)', need: t => t.body >= 8, low: 'THE ICE IS TOO THICK. YOU NEED BODY 8.', ok: 'YOU CHIP THE ICE FOR HOURS. YOUR ARMS BURN.', fat: 28, gain: { body: 1 }, coins: 15, flag: 'chip' },
+      { n: 'BRING WARM WATER (1 TIME)', need: t => t.sessions >= 1, low: 'IT IS NIGHT. NO ONE HAS WARM WATER.', ok: 'YOU CARRY WARM WATER FROM THE HOT HALL. SLOW, BUT SAFE.', time: 1, fat: -10, meal: 12, flag: 'warm' }],
+    after: { melt: 'VILLAGER: THE WELL FLOWS! YOU ARE A HERO.', chip: 'VILLAGER: THE WELL IS OPEN. YOUR ARMS MUST HURT!', warm: 'VILLAGER: SLOW AND STEADY. THANK YOU.' } },
+  harbor: { title: 'STOLEN CRATE', goal: 'THE HARBOR MASTER IN PORT NAVIS NEEDS TO FIND WHO TOOK A CRATE.', ask: 'HARBOR MASTER: A CRATE OF GOODS IS MISSING. TWO SAILORS BLAME EACH OTHER. WHAT DO YOU SAY?', remind: 'HARBOR MASTER: WELL? WHO TOOK THE CRATE?', how: 'WHAT DO YOU TELL THE HARBOR MASTER?',
+    opts: [{ n: 'IT WAS THE OLD SAILOR', need: t => true, low: '', ok: 'THE OLD SAILOR IS PUNISHED. HE LOOKS SAD... YOU GET A REWARD.', coins: 25, flag: 'blame' },
+      { n: 'I DO NOT KNOW', need: t => true, low: '', ok: 'HARBOR MASTER: AN HONEST ANSWER. HERE, A SMALL THANKS.', coins: 8, fat: -5, flag: 'honest' },
+      { n: 'CHECK THE LABELS (FOCUS 8)', need: t => t.focus >= 8 && t.sessions >= 1, low: 'YOU CANNOT READ THE CLUES. YOU NEED FOCUS 8 AND TIME.', ok: 'YOU FIND THE WRONG SHIP LABEL. THE CRATE WAS MISDELIVERED! NO ONE IS TO BLAME.', time: 1, gain: { focus: 1 }, coins: 15, ing: { herb: 1 }, flag: 'truth' }],
+    after: { blame: 'HARBOR MASTER: THE OLD SAILOR LEFT PORT. HMM.', honest: 'HARBOR MASTER: THE CRATE SHOWED UP LATER. FUNNY.', truth: 'HARBOR MASTER: YOUR EYES SEE WHAT OTHERS MISS.' } },
+  lava: { title: 'LAVA BRIDGE', goal: 'THE SMELTER IN EMBERPEAK NEEDS THE LAVA BRIDGE CROSSED AND FIXED.', ask: 'SMELTER: THE BRIDGE OVER THE LAVA CRACKED. I NEED A TOOL FROM THE OTHER SIDE. CAN YOU GET IT?', remind: 'SMELTER: THE TOOL IS STILL ACROSS THE LAVA.', how: 'HOW WILL YOU CROSS?',
+    opts: [{ n: 'RUN ACROSS (BODY 9)', need: t => t.body >= 9, low: 'THE HEAT BURNS YOU BACK. YOU NEED BODY 9.', ok: 'YOU SPRINT ACROSS AND BACK. HOT, BUT DONE!', fat: 30, gain: { body: 1 }, coins: 30, flag: 'run' },
+      { n: 'COOL THE LAVA (KI 9)', need: t => t.ki >= 9, low: 'YOUR KI CANNOT COOL THE LAVA. YOU NEED KI 9.', ok: 'YOU FREEZE A PATH WITH A KI WAVE. STEAM HISSES.', fat: 10, gain: { ki: 1 }, coins: 20, flag: 'cool' },
+      { n: 'FIND A SAFE PATH (FOCUS 8)', need: t => t.focus >= 8 && t.sessions >= 1, low: 'YOU SEE NO SAFE PATH. YOU NEED FOCUS 8 AND TIME.', ok: 'YOU SENSE A COLD STONE ROUTE AND WALK IT CALMLY.', time: 1, gain: { focus: 1 }, coins: 25, flag: 'path' }],
+    after: { run: 'SMELTER: YOUR FEET MUST BE MADE OF IRON.', cool: 'SMELTER: A NICE TRICK! THE ROCK IS STILL WARM.', path: 'SMELTER: YOU FOUND THE OLD PATH. WISE.' } },
+  bottle: { title: 'BOTTLE NOTE', goal: 'THE BEACHCOMBER ON SUNSET ISLE FOUND A SEALED BOTTLE.', ask: 'BEACHCOMBER: I FOUND A SEALED BOTTLE WITH A NOTE. SHOULD WE OPEN IT?', remind: 'BEACHCOMBER: THE BOTTLE IS STILL SEALED.', how: 'WHAT DO WE DO WITH THE BOTTLE?',
+    opts: [{ n: 'OPEN IT NOW', need: t => true, low: '', ok: 'THE NOTE SAYS: TREASURE UNDER THE OLD PALM. YOU DIG AND FIND COINS!', coins: 25, flag: 'open' },
+      { n: 'READ IT SLOWLY (FOCUS 7)', need: t => t.focus >= 7, low: 'THE INK IS FADED. YOU NEED FOCUS 7.', ok: 'YOU READ THE FADED WORDS. A MAP TO A HIDDEN SPRING! A HERB GROWS THERE.', gain: { focus: 1 }, ing: { herb: 2 }, flag: 'read' },
+      { n: 'SEND IT BACK (1 TIME)', need: t => t.sessions >= 1, low: 'IT IS NIGHT. THE TIDE IS OUT.', ok: 'YOU THROW IT BACK INTO THE SEA. THE BEACHCOMBER SMILES AND GIVES YOU HONEY.', time: 1, ing: { honey: 2 }, fat: -10, flag: 'send' }],
+    after: { open: 'BEACHCOMBER: WE ARE RICH! ...A LITTLE.', read: 'BEACHCOMBER: A SPRING! I NEVER SAW IT. THANKS.', send: 'BEACHCOMBER: MAYBE IT REACHES SOMEONE ELSE.' } },
+  parcel: { title: 'SPICE PARCEL', goal: 'CARRY THE SPICE PARCEL FROM SUNKARA TO THE FIRE ELDER IN EMBERPEAK.', to: true, ask: 'CARAVAN LEADER: THIS PARCEL OF SPICES MUST REACH THE FIRE ELDER IN EMBERPEAK. TAKE THE LAVA ROAD.', remind: 'CARAVAN LEADER: THE PARCEL GOES TO THE FIRE ELDER IN EMBERPEAK.',
+    doneLine: 'FIRE ELDER: THE SPICES! AT LAST. TAKE THESE.', fat: -15, gain: { body: 1 }, ing: { herb: 2, root: 1 }, coins: 20, after: { done: 'CARAVAN LEADER: THE ELDER SENT A THANK YOU. WELL DONE.' } } });
+function sideSt(id) { trainOf(); return ((saveData.sides || {})[id]) | 0; }
+function sideSet(id, v) { saveData.sides = saveData.sides || {}; saveData.sides[id] = v; }
+function sideFlag(id) { return (saveData.flags || {})[id] || ''; }
+function say2(a, b) { vTalk = a; say(a); vAfterTalk = () => { vTalk = b; say(b); }; }
+function gainBits(t, o) {
+  const bits = []; if (o.time) t.sessions = Math.max(0, t.sessions - o.time); if (o.fat) t.fatigue = Math.max(0, Math.min(99, t.fatigue + o.fat)); if (o.meal) t.meal = Math.max(t.meal, o.meal);
+  Object.keys(o.gain || {}).forEach(k => { if (t[k] < statCapOf(k)) { t[k]++; bits.push(k.toUpperCase() + ' +1'); } else bits.push(k.toUpperCase() + ' AT CAP'); });
+  Object.keys(o.ing || {}).forEach(k => { ingOf()[k] += o.ing[k]; bits.push(ING[k].n + ' +' + o.ing[k]); });
+  if (o.coins) { saveData.coins = coinsOf() + o.coins; bits.push(o.coins + ' COINS'); }
+  if (o.fat) bits.push('STRAIN ' + (o.fat > 0 ? '+' : '') + o.fat); if (o.meal) bits.push('FED +' + o.meal); if (o.time) bits.push(o.time + ' TIME SLOT');
+  return bits.join(', ') + '.';
+}
+function openSide(id) {
+  const S = SIDES[id], t = trainOf();
+  vTalk = S.how; say(S.how);
+  vAfterTalk = () => { vChoice = { idx: 0, opts: S.opts.map(o => o.n), dim: S.opts.map(o => !o.need(t)), pick: i => sideDo(id, i), no: 'COME BACK WHEN YOU ARE READY.' }; };
+}
+function sideDo(id, i) {
+  const S = SIDES[id], o = S.opts[i], t = trainOf();
+  if (!o.need(t)) { sfx('bad'); vTalk = o.low; say(vTalk); return; }
+  const bits = gainBits(t, o); sideSet(id, 2); saveData.flags = saveData.flags || {}; saveData.flags[id] = o.flag; trSave(); sfx('win'); vFlash = .4;
+  say2(o.ok, '(MISSION DONE: ' + bits.slice(0, -1) + ')');
+}
+function sideTalk(p) {
+  const id = p.side, S = SIDES[id], st = sideSt(id), t = trainOf();
+  const chat = () => { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; say(vTalk); };
+  if (p.sideRole === 'to') {
+    if (st !== 1) { chat(); return; }
+    const bits = gainBits(t, S); sideSet(id, 2); trSave(); sfx('win'); vFlash = .4; say2(S.doneLine, '(MISSION DONE: ' + bits.slice(0, -1) + ')'); return;
+  }
+  if (st === 0) { sfx('ok'); offerQuest(S.ask, () => { sideSet(id, 1); trSave(); sfx('ok'); if (S.opts) openSide(id); else { vTalk = 'THANK YOU! (MISSION STARTED)'; say(vTalk); } }, p.name + ': COME BACK WHEN YOU ARE READY.'); return; }
+  if (st === 1) { sfx('ok'); if (S.opts) { vTalk = S.remind; say(vTalk); vAfterTalk = () => openSide(id); } else { vTalk = S.remind; say(vTalk); } return; }
+  sfx('ok'); vTalk = S.after[sideFlag(id)] || S.after.done; say(vTalk);
+}
+const QM = { tavora: ['BOAR MEAT', 'HUNT A BOAR IN THE FOREST. BRING THE MEAT TO THE FARMER WIFE.', 'FARM HOUSE IN TAVORA'], mirakai: ['BIG FISH', 'CATCH A BIG FISH AT THE DEEP DOCK. GIVE IT TO THE FISHERMAN.', 'NET HOUSE IN MIRAKAI'],
+  keshin: ['20X GRAVITY', 'DO ONE TRAINING AT 20X IN THE GRAVITY HALL.', 'THE FOREMAN IN KESHIN'], lumora: ['CALM MIND', 'MEDITATE 3 TIMES IN THE MEDITATION HALL.', 'THE MONK IN LUMORA'] };
+function missionList() {
+  trainOf(); const q = questOf(), vis = saveData.visited || {}, tech = saveData.tech || [], M = [];
+  const add = (id, kind, title, st, goal, hud) => { if (st > 0) M.push({ id, kind, title, st, goal: st === 2 ? 'COMPLETED.' : goal, hud: hud || title }); };
+  add('roku', 'MAIN', 'BEAT ROKU', saveData.wins > 0 ? 2 : 1, 'WIN A FIGHT AGAINST ROKU IN THE ARENA. TRAIN FIRST.', 'BEAT ROKU IN THE ARENA');
+  add('sister', 'MAIN', 'THE LOST SISTER', q.step >= 4 ? 2 : 1, q.step === 0 ? 'TALK TO THE BOY IN SORYA. HE HAS A YELLOW !.' : q.step === 3 ? 'TELL THE BOY HIS SISTER IS SAFE.' : cluesFound(q) < 3 ? 'SEARCH THE FOREST WITH SPIRIT SENSE. CLUES ' + cluesFound(q) + '/3.' : 'THE HIDDEN TRAIL IS OPEN. BEAT THE BANDITS.',
+    q.step === 0 ? 'TALK TO THE BOY' : q.step === 3 ? 'TELL THE BOY' : cluesFound(q) < 3 ? 'FIND HER. CLUES ' + cluesFound(q) + '/3' : 'BEAT THE BANDITS');
+  add('master', 'MAIN', 'SPIRIT MASTER', tech.indexOf('steady') >= 0 ? 2 : vis.lumora ? 1 : 0, 'DUEL THE MASTER IN THE SPIRIT TEMPLE IN LUMORA.');
+  add('rival', 'MAIN', 'THE RIVAL', saveData.rivalDone ? 2 : vis.oraya ? 1 : 0, 'BEAT THE RIVAL IN THE GRAND ARENA IN ORAYA CITY.');
+  add('guild', 'MAIN', 'CHAMPION OF YARDRAT', questState('oraya'), questReady('oraya') ? 'GO TO THE GUILD CLERK IN ORAYA.' : 'BEAT THE MASTER AND THE RIVAL. THEN SEE THE GUILD CLERK.');
+  add('cook', 'SIDE', 'GOLDEN RAMEN', q2Of().step, 'CATCH A GOLD FISH AT THE LAKE. GIVE IT TO THE RAMEN COOK.', 'GOLD FISH FOR THE COOK');
+  add('friend', 'SIDE', 'BEST FRIENDS', q.step >= 4 ? (bondOf().boy >= 5 ? 2 : 1) : 0, 'TALK, GIVE FISH AND SPAR WITH THE BOY. BOND ' + bondOf().boy + '/5.', 'BEST FRIENDS ' + bondOf().boy + '/5');
+  Object.keys(QM).forEach(id => { const st = questState(id), r = questReady(id); add(id, 'SIDE', QM[id][0], st, r ? 'DONE! GO TO ' + QM[id][2] + '.' : QM[id][1] + (id === 'lumora' ? ' (' + Math.min(3, saveData.meditations | 0) + '/3)' : ''), QM[id][0] + (r ? ': TURN IN' : '')); });
+  Object.keys(SIDES).forEach(id => add(id, 'SIDE', SIDES[id].title, sideSt(id), SIDES[id].goal));
+  return M;
+}
+function logRows() { const rk = m => (m.st === 2 ? 2 : 0) + (m.kind === 'MAIN' ? 0 : 1); return missionList().map((m, i) => [m, i]).sort((a, b) => rk(a[0]) - rk(b[0]) || a[1] - b[1]).map(x => x[0]); }
+const LOG_VIS = 7; let logSel = 0, logTop = 0, logMsg = '';
+function toggleLog() {
+  if (mode === 'log') { mode = 'village'; sfx('move'); return; }
+  if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice) { mode = 'log'; logSel = 0; logTop = 0; logMsg = ''; sfx('ok'); }
+}
+function logPress(k) {
+  const rows = logRows();
+  if (k === 'back') { mode = 'village'; sfx('move'); return true; }
+  if (k === 'up' && rows.length) { logSel = (logSel + rows.length - 1) % rows.length; sfx('move'); }
+  else if (k === 'down' && rows.length) { logSel = (logSel + 1) % rows.length; sfx('move'); }
+  else if (k === 'ok' && rows[logSel]) {
+    const m = rows[logSel]; if (m.st !== 1) { sfx('bad'); logMsg = 'THIS ONE IS DONE.'; return true; }
+    trainOf(); saveData.pin = saveData.pin === m.id ? '' : m.id; trSave(); sfx('ok'); logMsg = saveData.pin ? 'SHOWN ON THE SCREEN NOW.' : 'NOT SHOWN ANY MORE.';
+  }
+  return true;
+}
+function drawLog() {
+  const rows = logRows(); trainOf();
+  ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, CW, H); flatBg();
+  center('MISSIONS', 5, '#ffd040', 2);
+  logSel = Math.max(0, Math.min(logSel, rows.length - 1)); if (logSel < logTop) logTop = logSel; if (logSel >= logTop + LOG_VIS) logTop = logSel - LOG_VIS + 1;
+  if (!rows.length) center('NO MISSIONS YET.', 90, '#c8c8e8', 1);
+  for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) {
+    const m = rows[logTop + i], y = 24 + i * 14, sel = logTop + i === logSel, done = m.st === 2;
+    if (sel) { ctx.fillStyle = '#1e1e48'; ctx.fillRect(4, y - 3, W - 8, 13); }
+    if (saveData.pin === m.id && !done) textS('*', 8, y, '#ffe060', 1);
+    textS(m.title, 18, y, done ? '#78a078' : sel ? '#ffe060' : '#ffffff', 1);
+    const tag = done ? 'DONE' : m.kind; textS(tag, W - 8 - textW(tag), y, done ? '#60c060' : m.kind === 'MAIN' ? '#ffb040' : '#60c8ff', 1);
+  }
+  if (logTop > 0) textS('^', W - 8, 16, '#8888b0', 1); if (logTop + LOG_VIS < rows.length) textS('v', W - 8, 122, '#8888b0', 1);
+  ctx.fillStyle = '#0d0d24'; ctx.fillRect(4, 128, W - 8, 74); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(4, 128, W - 8, 1); ctx.fillRect(4, 201, W - 8, 1);
+  const m = rows[logSel];
+  if (m) { textS(m.title, 10, 133, '#ffe060', 1); wrap(m.goal, 48).slice(0, 5).forEach((l, i) => textS(l, 10, 147 + i * 10, '#ffffff', 1)); if (m.kind === 'MAIN' && m.st === 1) textS('MAIN MISSION', W - 10 - textW('MAIN MISSION'), 133, '#ffb040', 1); }
+  textS(logMsg || (m && m.st === 1 ? (touchMode ? 'TAP AGAIN' : 'Z') + ': SHOW ON SCREEN' : ''), 8, 208, logMsg ? '#80ff80' : '#c8c8e8', 1);
+  textS(touchMode ? 'TAP A MISSION' : 'ARROWS  X: BACK', 8, 226, '#8888b0', 1);
+}
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
   else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
@@ -2313,6 +2751,7 @@ function menuPress(k) {
   if (mode === 'train' || mode === 'tevent') return trainPress(k);
   if (mode === 'village') return villagePress(k);
   if (mode === 'map') return mapPress(k);
+  if (mode === 'log') return logPress(k);
   if (mode === 'title') {
     if (k === 'up') { titleIdx = (titleIdx + 3) % 4; sfx('move'); }
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
@@ -2363,8 +2802,8 @@ function menuPress(k) {
     return true;
   }
   if (mode === 'options') {
-    if (k === 'up') { optIdx = (optIdx + 3) % 4; sfx('move'); }
-    else if (k === 'down') { optIdx = (optIdx + 1) % 4; sfx('move'); }
+    if (k === 'up') { optIdx = (optIdx + 4) % 5; sfx('move'); }
+    else if (k === 'down') { optIdx = (optIdx + 1) % 5; sfx('move'); }
     else if (k === 'back') { toTitle(); }
     else if (k === 'ok' || k === 'left' || k === 'right') {
       if (optIdx === 0) { setMuted(!muted); if (!muted) sfx('ok'); }
@@ -2372,7 +2811,8 @@ function menuPress(k) {
       else if (optIdx === 2) {
         const order = ['training', 'normal', 'master'], d = k === 'left' ? -1 : 1;
         difficulty = order[(order.indexOf(difficulty) + d + 3) % 3]; try { localStorage.setItem('yadra_diff', difficulty); } catch (e) {} sfx('move');
-      } else if (k === 'ok') toTitle();
+      } else if (optIdx === 3) { battleFast = !battleFast; try { localStorage.setItem('yadra_speed', battleFast ? 'fast' : 'normal'); } catch (e) {} sfx('move'); }
+      else if (k === 'ok') toTitle();
     }
     return true;
   }
@@ -2386,7 +2826,7 @@ const held = { up: false, down: false, left: false, right: false };
 let touchMode = false;
 addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k && held[k] !== undefined) held[k] = false; });
 addEventListener('blur', () => { for (const k in held) held[k] = false; });
-const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'over'];
+const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'log', 'over'];
 function drawBackBtn() {
   if (!touchMode || BACK_MODES.indexOf(mode) < 0) return;
   const label = mode === 'over' ? '< MENU' : '< BACK';
@@ -2411,20 +2851,23 @@ function drawBackBtn() {
     if (mode === 'title') { for (let i = 0; i < TITLE_ITEMS.length; i++) if (inR(6, 165 + i * 17, 230, 17)) { titleIdx = i; press('ok'); return; } }
     else if (mode === 'slots') { for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; } press('ok'); return; } }
     else if (mode === 'creator') { for (let i = 0; i < 8; i++) if (inR(8, 27 + i * 22, 172, 19)) { crRow = i; if (i >= 1 && i <= 5) press(x < 62 ? 'left' : 'right'); else press('ok'); return; } }
-    else if (mode === 'options') { for (let i = 0; i < 4; i++) if (inR(20, 31 + i * 26, 280, 24)) { optIdx = i; press('ok'); return; } }
+    else if (mode === 'options') { for (let i = 0; i < 5; i++) if (inR(20, 26 + i * 22, 280, 20)) { optIdx = i; press('ok'); return; } }
     else if (mode === 'credits') press('ok');
     else if (mode === 'train') { for (let i = 0; i < TR_ITEMS.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(8 + cc * 152, 166 + rr * 18, 146, 18)) { trIdx = i; press('ok'); return; } } }
     else if (mode === 'tevent') { for (let i = 0; i < 2; i++) if (inR(6, 186 + i * 17, 300, 17)) { trEvIdx = i; press('ok'); return; } }
     else if (mode === 'map') {
-      const vis = mapVisited();
-      for (const k of Object.keys(MAP_NODES)) { if (!vis[k]) continue; const n = MAP_NODES[k], w = Math.max(56, n.n.length * 6 + 12); if (inR(n.x + 34 - w / 2, n.y - 10, w, 20)) { if (mapSel === k) press('ok'); else { mapSel = k; sfx('move'); } return; } }
+      if (y < 14 && x > W - 90) { press('zoom'); return; }
+      const xf = mapXf(); let hit = null, hd = 18;
+      mapKnown().concat(Object.keys(MAP_NODES).filter(k => !mapVisited()[k] && MAP_EDGES.some(e => (e[0] === k && mapVisited()[e[1]]) || (e[1] === k && mapVisited()[e[0]])))).forEach(k => { const q = mapNodeXY(k, xf), d = Math.hypot(q.x - x, q.y - y); if (d < hd) { hd = d; hit = k; } });
+      if (hit) { if (mapSel === hit) press('ok'); else { mapSel = hit; mapMsg = ''; sfx('move'); } }
     }
     else if (mode === 'menu') {
       if (state.p.collapsed) { press('ok'); return; }
       for (let i = 0; i < MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
     }
     else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
-    else if (mode === 'village' && vChoice) { for (let i = 0; i < 2; i++) if (inR(2, 198 + i * 19, CW - 4, 19)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
+    else if (mode === 'village' && vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? inR(2, 198 + i * 19, CW - 4, 19) : inR(2, 199 + i * 13, CW - 4, 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
+    else if (mode === 'log') { const rows = logRows(); for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) if (inR(2, 21 + i * 14, W - 4, 14)) { if (logSel === logTop + i) press('ok'); else { logSel = logTop + i; sfx('move'); } return; } }
     else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
   }
   addEventListener('pointerdown', e => {
@@ -2437,7 +2880,7 @@ function drawBackBtn() {
         try { document.body.setPointerCapture(e.pointerId); } catch (_) {} return;
       }
       const c = canvasXY(e);
-      if (c.inside && c.y < 14 && c.x > CW - 70) press('map'); else press('ok');
+      if (c.inside && c.y < 14 && c.x > CW - 70) press('map'); else if (c.inside && c.y < 14 && c.x > 40) press('log'); else press('ok');
       return;
     }
     tapAt(canvasXY(e));
@@ -2468,7 +2911,7 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
   get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
-  get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; } };
+  get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; } };
 requestAnimationFrame(frame);
 })();
 </script>

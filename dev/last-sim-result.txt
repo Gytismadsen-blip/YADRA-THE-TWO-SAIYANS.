@@ -1,0 +1,11 @@
+Fights per bot: 5000
+
+random        win  17.7% | avg turns 14.9 | collapse/fight 0.05 | Roku reads/fight 0.38 | timeouts   0.0% | HP left when won 11
+lance-spam    win  32.2% | avg turns 11.6 | collapse/fight 1.86 | Roku reads/fight 1.51 | timeouts   0.0% | HP left when won 9
+phantom-spam  win   0.0% | avg turns 16.5 | collapse/fight 0.00 | Roku reads/fight 6.96 | timeouts   0.0% | HP left when won -
+strike-spam   win   0.0% | avg turns 13.3 | collapse/fight 0.00 | Roku reads/fight 4.74 | timeouts   0.0% | HP left when won -
+blast-spam    win   0.1% | avg turns 12.4 | collapse/fight 0.00 | Roku reads/fight 5.99 | timeouts   0.0% | HP left when won 1
+guard-heavy   win   0.0% | avg turns 14.0 | collapse/fight 0.00 | Roku reads/fight 8.49 | timeouts   0.0% | HP left when won -
+smart         win  39.0% | avg turns 15.7 | collapse/fight 0.00 | Roku reads/fight 0.14 | timeouts   0.0% | HP left when won 13
+
+smart bot move mix: lance 9%, sense 14%, phantom 21%, blast 16%, charge 25%, strike 11%, guard 4%
