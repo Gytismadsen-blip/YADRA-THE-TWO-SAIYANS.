@@ -52,6 +52,15 @@
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
   }
 
+  // A weaker/other enemy on the same brain. Call after setDifficulty and BEFORE setStats.
+  //   hp/dmg = multipliers, late/plan = read chances, fury:false = no second phase
+  function setFoe(f) {
+    f = f || {}; const R = CFG.roku;
+    R.hp = Math.round(R.hp * (f.hp || 1)); R.rush = Math.round(R.rush * (f.dmg || 1)); R.blast = Math.round(R.blast * (f.dmg || 1));
+    R.phase2At = f.fury === false ? -1 : Math.floor(R.hp / 2);
+    if (f.late != null) CFG.lateReadChance = f.late; if (f.plan != null) CFG.planReadChance = f.plan;
+  }
+
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -235,7 +244,7 @@
     return s;
   }
 
-  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, setStats, DIFFS };
+  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, setStats, setFoe, DIFFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.YadraCombat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

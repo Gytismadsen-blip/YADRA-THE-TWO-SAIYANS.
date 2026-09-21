@@ -96,6 +96,15 @@
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
   }
 
+  // A weaker/other enemy on the same brain. Call after setDifficulty and BEFORE setStats.
+  //   hp/dmg = multipliers, late/plan = read chances, fury:false = no second phase
+  function setFoe(f) {
+    f = f || {}; const R = CFG.roku;
+    R.hp = Math.round(R.hp * (f.hp || 1)); R.rush = Math.round(R.rush * (f.dmg || 1)); R.blast = Math.round(R.blast * (f.dmg || 1));
+    R.phase2At = f.fury === false ? -1 : Math.floor(R.hp / 2);
+    if (f.late != null) CFG.lateReadChance = f.late; if (f.plan != null) CFG.planReadChance = f.plan;
+  }
+
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -279,7 +288,7 @@
     return s;
   }
 
-  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, setStats, DIFFS };
+  const api = { CFG, newFight, legalMoves, step, kiCost, setDifficulty, setStats, setFoe, DIFFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.YadraCombat = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -416,6 +425,10 @@ function makeSet(frames, pal) {
 }
 const SET_R = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R);
 const SET_R2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R2);
+const PAL_B = { K:'#2a2a3a', S:'#d8a878', B:'#101010', R:'#8a30b0', D:'#402060', O:'#5a3a80', A:'#404050', Y:'#a0a0b0' };
+const SET_B = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_B);
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1, late: .85, plan: .7, fury: false } };
+let foe = FOES.roku;
 
 // ---------- background (Yardrat dusk), drawn once ----------
 const bg = document.createElement('canvas'); bg.width = W; bg.height = 160;
@@ -574,6 +587,7 @@ function say(text, opt) {
   if (/^ROKU:/i.test(t)) { who = 'roku'; t = t.replace(/^ROKU:\s*/i, ''); }
   else if (t.toUpperCase().indexOf(hero.name + ':') === 0) { who = 'gytis'; t = t.slice(hero.name.length + 1).trim(); }
   t = t.toLowerCase().replace(/\bki\b/g, 'kee').replace(/%/g, ' percent');
+  if (foe.id !== 'roku' && (mode === 'anim' || mode === 'menu' || mode === 'over' || mode === 'intro')) t = t.replace(/\broku\b/g, foe.name.toLowerCase());
   try {
     const u = new SpeechSynthesisUtterance(t), id = ++speakId, V = VOICES[who], shout = !!(opt && opt.shout);
     u.lang = 'en-US';
@@ -631,13 +645,13 @@ const parts = [], pops = [];
 
 function newGame(opts) {
   const seed = params.get('seed') ? Number(params.get('seed')) : (Date.now() & 0xffff) + 1;
-  C.setDifficulty(difficulty); C.setStats(saveData && saveData.train);
+  foe = FOES[(opts && opts.foe) || 'roku'] || FOES.roku; C.setDifficulty(difficulty); C.setFoe(foe.id === 'roku' ? null : foe); C.setStats(saveData && saveData.train);
   state = C.newFight(seed);
   Object.assign(disp, { php: C.CFG.player.hp, pki: C.CFG.player.ki, pst: C.CFG.player.st, pstr: C.CFG.startStrain || 0, rhp: C.CFG.roku.hp });
   Object.assign(tgt, disp);
   displayKnown = []; over = null; script = []; si = 0; banner = null; reacted = {}; lastReactT = -9; lastShoutT = -9; lastBanterT = -9;
   Object.assign(P, { ox: 0, oy: 0, alpha: 1, flash: 0, auraCol: null, auraI: 0, ghosts: [], pose: 'idle', lean: 0, squash: 1, hurt: 0 });
-  Object.assign(R, { ox: 0, oy: 0, alpha: 1, flash: 0, auraCol: null, auraI: 0, ghosts: [], pose: 'idle', lean: 0, squash: 1, hurt: 0, form: 1, set: SET_R });
+  Object.assign(R, { ox: 0, oy: 0, alpha: 1, flash: 0, auraCol: null, auraI: 0, ghosts: [], pose: 'idle', lean: 0, squash: 1, hurt: 0, form: 1, set: foe.set });
   cine = 0; cineT = 0;
   menuIdx = 0; msg = ''; curInfoMsg = '';
   if (opts && opts.intro) { buildIntro(); mode = 'intro'; introPage = 0; setMsg(INTRO[0]); say(INTRO[0]); }
@@ -651,7 +665,7 @@ function buildIntro() {
   if (n === 'GYTIS') INTRO.push('ROKU: GYTIS? THE ONE WHO MADE THIS PLACE? WE WILL SEE.');
   INTRO.push("ROKU: LET'S SEE WHAT ELDER SOBA REALLY TAUGHT YOU.", 'TIP: WATCH YOUR STRAIN. TOO MUCH POWER BREAKS YOUR BODY.', 'TIP: ROKU LEARNS YOUR HABITS. DO NOT REPEAT YOURSELF.');
 }
-function setMsg(m) { msg = m; msgT = 0; }
+function setMsg(m) { msg = foe.id === 'roku' ? m : String(m).replace(/ROKU/g, foe.name); msgT = 0; }
 
 // ---------- effects ----------
 function burst(x, y, col, n, sp) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: rnd(-sp, sp), vy: rnd(-sp, sp * .3), life: rnd(.3, .7), t: 0, col, sz: (rnd(2, 4)) | 0 }); }
@@ -897,7 +911,7 @@ function startStep() {
   if (!s) return;
   if (s.pose && s.pose[0]) s.pose[0].pose = s.pose[1];
   if (s.msg) { setMsg(s.msg); if (s.speak) say(s.msg); }
-  if (s.shout || s.banner) banner = { text: s.banner || '', who: s.who, t: 0 };
+  if (s.shout || s.banner) banner = { text: foe.id === 'roku' ? (s.banner || '') : (s.banner || '').replace(/ROKU/g, foe.name), who: s.who, t: 0 };
   if (s.shout) say(s.shout, { who: s.who, shout: true });
   if (s.start) s.start();
 }
@@ -939,7 +953,7 @@ function press(k) {
     return;
   }
   if (mode === 'anim') { if (k === 'ok' || k === 'back') { fast = true; stopSpeech(); } return; }
-  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (saveData) toVillage('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
+  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (foe.id !== 'roku') foeAfter(over === 'win'); else if (saveData) toVillage('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
   if (mode === 'menu') {
     if (state.p.collapsed) { if (k === 'ok') { sfx('ok'); doTurn('collapse'); } return; }
     let c = menuIdx % 2, r = menuIdx >> 1;
@@ -1002,7 +1016,7 @@ function drawHud() {
   const blink = disp.pstr >= 75 && Math.floor(time * 6) % 2 === 0;
   textS('STR', 6, 45, blink ? '#ff6060' : '#ffffff', 1); bar(26, 46, 84, 6, disp.pstr, 100, sc, { marks: [50, 75] }); textS(String(Math.round(disp.pstr)), 114, 45, sc, 1);
   textS('TURN ' + (s.t + 1), 140, 6, '#c8c8e8', 1);
-  textS('ROKU', 206, 6, '#ff8080', 1);
+  textS(foe.name, 206, 6, '#ff8080', 1);
   if (R.form === 2) textS('FURY', 240, 6, '#ff3030', 1);
   bar(206, 16, 108, 6, disp.rhp, C.CFG.roku.hp, R.form === 2 ? '#ff5030' : '#e05050', { marks: [C.CFG.roku.phase2At] });
   textS(String(Math.round(disp.rhp)), 206, 24, '#ffffff', 1);
@@ -1056,6 +1070,7 @@ function drawToggles() {
 let overTxt = '';
 // Roku comments on HOW the fight went (HP left, collapses, length, strain, favourite move). Max 2 lines on screen (~44 chars).
 function overLine() {
+  if (foe.id !== 'roku') return foe.name + ': ' + (over === 'win' ? 'OKAY! OKAY! I GIVE UP!' : 'HA! GO HOME, KID.');
   const p = state.p, hp = Math.round(p.hp), frac = p.hp / C.CFG.player.hp, rfrac = state.r.hp / C.CFG.roku.hp, turns = state.t;
   const cnt = {}; state.hist.forEach(m => { if (m !== 'collapse') cnt[m] = (cnt[m] || 0) + 1; });
   const collapses = state.hist.filter(m => m === 'collapse').length;
@@ -1105,7 +1120,7 @@ function drawOver() {
   lines.forEach((l, i) => textS(l, 12, 170 + i * 16, '#ffffff', 2));
   textS(l2, 12, 170 + lines.length * 16 + 4, '#c8c8e8', 1);
   if (justSaved) textS('PROGRESS SAVED', 12, 219, '#80e0a0', 1);
-  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
+  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((foe.id !== 'roku' ? 'Z: CONTINUE   X: MENU' : saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
 }
 
 // ---------- main loop ----------
@@ -1180,6 +1195,7 @@ function writeSlot(i, d) { try { localStorage.setItem(SAVE_KEY(i), JSON.stringif
 function anySave() { return [0, 1, 2].some(i => readSlot(i)); }
 function recordFight(win) { // progress is saved after every fight
   if (!saveData || curSlot < 0) return false;
+  if (foe.id !== 'roku') { saveData.spar = (saveData.spar | 0) + 1; saveData.savedAt = Date.now(); return writeSlot(curSlot, saveData); } // side fights do not start a new day
   saveData.fights = (saveData.fights || 0) + 1;
   if (win) { saveData.wins = (saveData.wins || 0) + 1; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
@@ -1440,7 +1456,7 @@ const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 134 }, { x: 118, y: 150 }, { x:
 for (let x = 330; x < 632; x += 26) { V_TREES.push({ x: x + ((x / 26) % 2) * 8, y: 70 + ((x / 26) % 3) * 10 }); } // treeline north of the east path
 for (let i = 0; i < 70; i++) { const x = 340 + ((i * 97) % 290), y = 132 + ((i * 61) % 262); if (x > V_LAKE.x0 - 14 && x < V_LAKE.x1 + 14 && y > V_LAKE.y0 - 14 && y < V_LAKE.y1 + 24) continue; if (y > 300 && y < 336 && x < 372) continue; V_TREES.push({ x, y }); }
 for (let i = 0; i < 16; i++) V_TREES.push({ x: 10 + ((i * 41) % 130), y: 350 + ((i * 29) % 44) }); // south-west woods
-const V_SIGNS = [{ x: 318, y: 124, text: 'EAST: THE FOREST PATH. TRAVELLERS WELCOME.' }, { x: 618, y: 124, text: 'THE GATE IS SHUT. ROKU SAYS THE FOREST IS NOT SAFE YET.' }, { x: 170, y: 322, text: 'LAKE THIS WAY. NO FEEDING THE FISH ROKU.' }];
+const V_SIGNS = [{ x: 318, y: 124, text: 'EAST: THE FOREST PATH. TRAVELLERS WELCOME.' }, { x: 618, y: 124, gate: true, text: 'THE GATE IS SHUT. ROKU SAYS THE FOREST IS NOT SAFE YET.' }, { x: 170, y: 322, text: 'LAKE THIS WAY. NO FEEDING THE FISH ROKU.' }];
 const ROOMS = {
   home: { w: 200, h: 140, door: 100, miny: 56, name: 'YOUR HOME', solids: [[12, 58, 60, 76], [92, 74, 144, 90], [116, 30, 184, 52]] },
   ramen: { w: 240, h: 150, door: 120, miny: 70, name: 'RAMEN HOUSE', solids: [[24, 52, 216, 68], [36, 92, 80, 110], [160, 96, 204, 114]] } };
@@ -1458,35 +1474,38 @@ const MEALS = [
 const V_PEOPLE = [
   { name: 'GUEST', body: '#e8e8e8', hair: '#402010', zone: [120, 100, 200, 116], lines: ['THE RAMEN HOUSE GIVES YOU HP FOR THE FIGHT. GO INSIDE!', 'I WAIT FOR A TABLE. THE FEAST TAKES FOREVER.'] },
   { name: 'GIRL', body: '#e06080', hair: '#f0c040', zone: [60, 100, 130, 116], lines: ['I WATCHED YOU TRAIN. THE FLOOR SHOOK!', 'ROKU NEVER LOST HERE. NOT ONCE.'] },
-  { name: 'BOY', body: '#40a060', hair: '#202020', zone: [130, 128, 220, 186], small: true, lines: ['CAN YOU TEACH ME A KI BLAST? PLEASE?', 'WHEN I GROW UP I WILL BEAT ROKU. WATCH ME!'] },
+  { name: 'BOY', role: 'boy', body: '#40a060', hair: '#202020', zone: [110, 128, 172, 186], small: true, lines: ['CAN YOU TEACH ME A KI BLAST? PLEASE?', 'WHEN I GROW UP I WILL BEAT ROKU. WATCH ME!'] },
   { name: 'FARMER', body: '#a07040', hair: '#c0c0c0', zone: [40, 244, 130, 330], lines: ['EAT BEFORE YOU FIGHT. EMPTY STOMACH, EMPTY KI.', 'MY CROPS GROW BEST WHEN ROKU IS NOT TRAINING NEARBY.'] },
   { name: 'FIGHTER', body: '#c05030', hair: '#101010', zone: [200, 100, 280, 116], lines: ['GRAVITY 20X? YOU ARE CRAZY. I LIKE IT.', 'SPIRIT SENSE WORKS BEST WHEN YOU STAY CALM.'] },
   { name: 'DOG', body: '#c89060', hair: '#c89060', zone: [10, 165, 110, 190], dog: true, lines: ['WOOF!', 'WOOF WOOF!'] },
   { name: 'FISHER', body: '#4080c0', hair: '#402010', zone: [390, 326, 530, 346], lines: ['THE FISH HERE ARE HUGE. SO ARE THE APPETITES.', 'SHH! I AM WAITING FOR A BIG ONE.'] },
   { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
+  { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [110, 128, 172, 186], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
   { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
 const V_TIPS = ['ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
 Object.keys(ROOM_PEOPLE).forEach(k => ROOM_PEOPLE[k].forEach(p => { p.face = 1; p.step = 0; p.line = 0; }));
-function curPeople() { return area === 'village' ? V_PEOPLE : ROOM_PEOPLE[area]; }
+function curPeople() { return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
 function toVillage(line) {
-  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vMenu = null; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
+  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vAfterTalk = null; vMenu = null; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
 function enterRoom(name) { area = name; vx = ROOMS[name].door; vy = ROOMS[name].h - 16; vFade = 1; vWalk = 0; vMsg = ''; sfx('ok'); }
 function exitRoom() { const b = area === 'home' ? V_HOME : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
 function vNearPerson() { let best = -1, bd = 26; curPeople().forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
+  if (area === 'forest') return forestTarget();
   if (area !== 'village') return vNearPerson() >= 0 ? 'person' : null;
   const low = (b) => vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22;
   if (low(V_TRAIN)) return 'train'; if (low(V_RAMEN)) return 'ramen'; if (low(V_ARENA)) return 'arena'; if (low(V_REST)) return 'rest'; if (low(V_HOME)) return 'home';
-  if (Math.hypot(vx - V_ELDER.x, vy - V_ELDER.y) < 28) return 'elder';
+  { const de = Math.hypot(vx - V_ELDER.x, vy - V_ELDER.y), np = vNearPerson(), dp = np >= 0 ? Math.hypot(vx - curPeople()[np].x, vy - curPeople()[np].y) : 99; if (de < 28 && de <= dp) return 'elder'; }
   if (V_SIGNS.some(s => Math.hypot(vx - s.x, vy - s.y) < 22)) return 'sign';
   return vNearPerson() >= 0 ? 'person' : null;
 }
 function vSolid(x, y) {
+  if (area === 'forest') return forestSolid(x, y);
   if (area !== 'village') return ROOMS[area].solids.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3]);
   const inB = b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1;
   if (inB(V_TRAIN) || inB(V_RAMEN) || inB(V_ARENA) || inB(V_REST) || inB(V_HOME)) return true;
@@ -1496,9 +1515,11 @@ function vSolid(x, y) {
 }
 function villageUpdate(dt) {
   if (vFlash > 0) vFlash -= dt; if (vFade > 0) vFade = Math.max(0, vFade - dt * 3);
-  const near = vNearPerson();
+  if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
+  const near = vNearPerson(), nearP = curPeople()[near];
+  if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
   if (area === 'village') V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
-    if (i === near || vTalk) return;
+    if (p === nearP || vTalk || (p.hidden && questOf().step < 3)) return;
     if (p.wait > 0) { p.wait -= dt; return; }
     const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
     if (d < 2) { p.wait = 1 + Math.random() * 2.5; p.tx = p.zone[0] + Math.random() * (p.zone[2] - p.zone[0]); p.ty = p.zone[1] + Math.random() * (p.zone[3] - p.zone[1]); p.step = 0; return; }
@@ -1509,13 +1530,18 @@ function villageUpdate(dt) {
     if (dx || dy) {
       const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
       let minX = 10, maxX = WORLD.w - 10, minY = 100, maxY = WORLD.h - 8;
-      if (area !== 'village') { const r = ROOMS[area]; minX = 10; maxX = r.w - 10; minY = r.miny; maxY = r.h - 8; if (Math.abs(vx - r.door) <= 18) maxY = r.h; }
+      if (area === 'village' && !gateOpen()) maxX = 616;
+      if (area === 'forest') { minX = 3; maxX = FOREST.w - 10; minY = 40; maxY = FOREST.h - 8; }
+      else if (area !== 'village') { const r = ROOMS[area]; minX = 10; maxX = r.w - 10; minY = r.miny; maxY = r.h - 8; if (Math.abs(vx - r.door) <= 18) maxY = r.h; }
       const nx = Math.max(minX, Math.min(maxX, vx + dx * sp)), ny = Math.max(minY, Math.min(maxY, vy + dy * sp));
       if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
-      if (area !== 'village' && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
+      if (area === 'village' && vx >= 626 && gateOpen()) enterForest();
+      else if (area === 'forest' && vx <= 5) exitForest();
+      else if (area !== 'village' && area !== 'forest' && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
     } else vWalk = 0;
   }
   if (area === 'village') { camX = Math.round(Math.max(0, Math.min(WORLD.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(WORLD.h - 196, vy - 100))); }
+  else if (area === 'forest') { camX = Math.round(Math.max(0, Math.min(FOREST.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(FOREST.h - 196, vy - 100))); }
   else { const r = ROOMS[area]; camX = -Math.round((320 - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
 }
 function vEat(m) {
@@ -1527,7 +1553,7 @@ function vEat(m) {
   trSave(); sfx('ok'); vFlash = .35; vMenu = null; vMsg = m.hp ? 'YUM! ' + m.d + '.' : 'AHH. ' + m.d + '.'; say(vMsg);
 }
 function villagePress(k) {
-  if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); } return true; }
+  if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); if (vAfterTalk) { const f = vAfterTalk; vAfterTalk = null; f(); } } return true; }
   if (vMenu) {
     if (k === 'up') { vMenu.idx = (vMenu.idx + MEALS.length - 1) % MEALS.length; sfx('move'); }
     else if (k === 'down') { vMenu.idx = (vMenu.idx + 1) % MEALS.length; sfx('move'); }
@@ -1538,6 +1564,7 @@ function villagePress(k) {
   if (k === 'back') { if (area !== 'village') { exitRoom(); return true; } sfx('move'); toTitle(); return true; }
   if (k !== 'ok') return true;
   const t = trainOf(), tg = vTarget();
+  if (!tg && area === 'forest') { senseNow(); return true; }
   if (tg === 'train') { sfx('ok'); toTrain('ROKU: PICK YOUR TRAINING.'); }
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
   else if (tg === 'ramen') enterRoom('ramen');
@@ -1548,11 +1575,13 @@ function villagePress(k) {
     else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
+  } else if (tg === 'clue') { inspectClue();
   } else if (tg === 'sign') {
-    const s = V_SIGNS.find(q => Math.hypot(vx - q.x, vy - q.y) < 22); sfx('ok'); vTalk = s.text; say(vTalk);
+    const s = V_SIGNS.find(q => Math.hypot(vx - q.x, vy - q.y) < 22); sfx('ok'); vTalk = (s.gate && gateOpen()) ? 'THE GATE IS OPEN. BE CAREFUL IN THE FOREST.' : s.text; say(vTalk);
   } else if (tg === 'person') {
     const p = curPeople()[vNearPerson()];
-    if (p.role === 'cook') { sfx('ok'); vMenu = { idx: 0 }; }
+    if (p.role === 'boy') boyTalk();
+    else if (p.role === 'cook') { sfx('ok'); vMenu = { idx: 0 }; }
     else if (p.role === 'mom') {
       if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
       else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = 'MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)'; }
@@ -1648,7 +1677,7 @@ function drawVillage() {
   const t = trainOf(), tg = vTarget();
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, 196); ctx.clip(); ctx.translate(-camX, -camY);
-  if (area === 'village') drawWorld(); else drawRoom();
+  if (area === 'village') drawWorld(); else if (area === 'forest') drawForest(); else drawRoom();
   if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const q = tg === 'elder' ? { x: V_ELDER.x, y: V_ELDER.y - 40 } : (p => ({ x: p.x, y: p.y - 38 }))(curPeople()[vNearPerson()]); textS('!', Math.round(q.x) - 2, Math.round(q.y), '#ffe060', 2); }
   ctx.restore();
   { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, W, 196); } }
@@ -1668,14 +1697,105 @@ function drawVillage() {
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', 'SOUP, BIG MEAL OR FEAST.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, '']) : ['', ''];
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], person: pinfo }[tg];
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
-    textS(area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : 'WALK DOWN TO LEAVE.', 8, 226, '#8888b0', 1);
+    textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
   }
   if (vFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + vFade + ')'; ctx.fillRect(0, 0, W, 196); }
   if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, W, 196); }
+}
+// ================= the forest + mission 1 (the missing sister) =================
+const FOREST = { w: 600, h: 280 };
+const F_PATHS = [[0, 126, 262, 152], [236, 126, 262, 214], [236, 188, 480, 214]]; // x0,y0,x1,y1 of the trail
+const F_HOLLOW = [472, 140, 600, 272];
+const F_BUSH = [458, 170, 478, 224]; // blocks the trail until all 3 clues are found
+const F_CLUES = [
+  { x: 120, y: 146, kind: 'feet', text: 'SMALL FOOTPRINTS. A CHILD WENT THIS WAY.' },
+  { x: 250, y: 172, kind: 'basket', text: 'A DROPPED BASKET OF MUSHROOMS. SHE WAS HERE.' },
+  { x: 380, y: 204, kind: 'cloth', text: 'A TORN PIECE OF CLOTH. THE TRAIL LEADS EAST.' }];
+const F_TREES = [];
+for (let i = 0; i < 150; i++) {
+  const x = 8 + ((i * 89) % 584), y = 24 + ((i * 53) % 254);
+  if (F_PATHS.some(r => x > r[0] - 18 && x < r[2] + 18 && y > r[1] - 6 && y < r[3] + 30)) continue;
+  if (x > F_HOLLOW[0] - 20 && y > F_HOLLOW[1] - 10) continue;
+  F_TREES.push({ x, y });
+}
+let vSenseT = 0, vSenseTo = null, vBanditT = 0, vAfterTalk = null;
+function questOf() {
+  trainOf(); const q = saveData.quest || (saveData.quest = { step: 0, clues: [0, 0, 0] });
+  q.step = Math.max(0, Math.min(4, q.step | 0)); if (!Array.isArray(q.clues) || q.clues.length !== 3) q.clues = [0, 0, 0];
+  return q;
+}
+const cluesFound = q => q.clues.filter(Boolean).length;
+const gateOpen = () => questOf().step >= 1;
+function forestPeople() { // bandits guard the girl once the hidden trail has opened
+  const q = questOf(); if (q.step >= 3 || cluesFound(q) < 3) return [];
+  return [
+    { name: 'BANDIT', x: 520, y: 200, body: '#6a3080', hair: '#303030', face: -1, step: 0, lines: [] },
+    { name: 'BANDIT', x: 552, y: 216, body: '#6a3080', hair: '#202020', face: -1, step: 0, lines: [] },
+    { name: 'SISTER', x: 570, y: 184, body: '#e0a0a0', hair: '#804020', face: -1, step: 0, line: 0, lines: ['SISTER: PLEASE HELP ME! THEY WILL NOT LET ME GO!'] }];
+}
+function enterForest() { area = 'forest'; vx = 24; vy = 140; vFade = 1; vWalk = 0; vBanditT = 0; vSenseT = 0; vMsg = 'THE FOREST. PRESS ' + (touchMode ? 'OK' : 'Z') + ' TO USE SPIRIT SENSE.'; sfx('ok'); }
+function exitForest() { area = 'village'; vx = 612; vy = 112; vFade = 1; vWalk = 0; vMsg = 'BACK IN THE VILLAGE.'; sfx('move'); }
+function toForest(x, y, line) {
+  stopSpeech(); trainOf(); mode = 'village'; area = 'forest'; vx = x; vy = y; vTalk = ''; vMenu = null; vFade = 1; vFlash = 0; vBanditT = 6; vSenseT = 0;
+  P.set = makeHeroSet(hero); vMsg = line || ''; if (line) say(line);
+}
+function fightBandits() { stopSpeech(); newGame({ foe: 'bandit', line: 'GET LOST, KID, OR ELSE!' }); }
+function foeAfter(win) { // called from the fight-over screen after a non-Roku fight
+  const q = questOf();
+  if (win) { q.step = Math.max(q.step, 3); trSave(); toForest(505, 202, 'THE GIRL RUNS TO YOU. GO TELL HER BROTHER!'); }
+  else toForest(40, 140, 'THEY BEAT YOU. TRAIN, EAT, AND TRY AGAIN.');
+}
+function boyTalk() {
+  const q = questOf(), t = trainOf();
+  if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! PLEASE FIND HER! (QUEST STARTED. THE EAST GATE IS OPEN.)'; }
+  else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
+  else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2)'; }
+  else vTalk = 'BOY: WHEN I GROW UP I WILL BE STRONG LIKE YOU!';
+  say(vTalk);
+}
+function questLine() {
+  const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : "QUEST: FIND THE BOY'S SISTER. GO EAST.";
+  if (q.step === 3) return 'QUEST: TELL THE BOY THE GOOD NEWS.'; return '';
+}
+function forestSolid(x, y) {
+  if (cluesFound(questOf()) < 3 && x > F_BUSH[0] && x < F_BUSH[2] && y > F_BUSH[1] && y < F_BUSH[3]) return true;
+  return F_TREES.some(t => Math.hypot(x - t.x, y - t.y) < 8);
+}
+function forestTarget() {
+  const q = questOf(), ci = F_CLUES.findIndex((c, i) => !q.clues[i] && Math.hypot(vx - c.x, vy - c.y) < 24);
+  if (ci >= 0) return 'clue';
+  return vNearPerson() >= 0 ? 'person' : null;
+}
+function senseNow() {
+  const t = trainOf(), q = questOf(); if (vSenseT > 0) return;
+  t.fatigue = Math.min(99, t.fatigue + 2); trSave(); vSenseT = 2.6; sfx('warn');
+  const ci = F_CLUES.findIndex((c, i) => !q.clues[i]);
+  vSenseTo = ci >= 0 ? { x: F_CLUES[ci].x, y: F_CLUES[ci].y } : (q.step < 3 ? { x: 530, y: 205 } : { x: 8, y: 138 });
+  vMsg = 'SPIRIT SENSE... STRAIN +2.';
+}
+function inspectClue() {
+  const q = questOf(), i = F_CLUES.findIndex((c, k) => !q.clues[k] && Math.hypot(vx - c.x, vy - c.y) < 24); if (i < 0) return;
+  q.clues[i] = 1; trSave(); sfx('ok'); vFlash = .25; vTalk = F_CLUES[i].text;
+  if (cluesFound(q) === 3) { vTalk += ' THE BUSHES PART. A HIDDEN TRAIL OPENS!'; sfx('win'); }
+  say(vTalk);
+}
+function drawForest() {
+  const q = questOf(), open = cluesFound(q) >= 3, rr = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  rr(0, 0, FOREST.w, FOREST.h, '#1d4a2a'); ctx.fillStyle = '#255a33'; for (let i = 0; i < 90; i++) ctx.fillRect((i * 67) % 590, (i * 41) % 270, 4, 2);
+  F_PATHS.forEach(r => rr(r[0], r[1], r[2] - r[0], r[3] - r[1], '#8a7a52')); ctx.fillStyle = '#7a6a44'; for (let i = 0; i < 40; i++) ctx.fillRect(4 + (i * 37) % 470, 130 + (i * 11) % 20, 3, 2);
+  rr(F_HOLLOW[0], F_HOLLOW[1], F_HOLLOW[2] - F_HOLLOW[0], F_HOLLOW[3] - F_HOLLOW[1], open ? '#3a7a4a' : '#2a5a38'); if (open) { ctx.fillStyle = '#e8d060'; for (let i = 0; i < 14; i++) ctx.fillRect(480 + (i * 23) % 110, 150 + (i * 31) % 110, 2, 2); }
+  textS('< VILLAGE', 6, 132, '#c8f0c8', 1);
+  F_CLUES.forEach((c, i) => { const f = q.clues[i]; ctx.globalAlpha = f ? .35 : 1; if (c.kind === 'feet') { rr(c.x - 5, c.y - 3, 4, 6, '#5a4a30'); rr(c.x + 2, c.y - 6, 4, 6, '#5a4a30'); } else if (c.kind === 'basket') { rr(c.x - 7, c.y - 6, 14, 8, '#a06a30'); rr(c.x - 6, c.y - 9, 4, 3, '#e8e8e8'); rr(c.x + 2, c.y - 9, 4, 3, '#d05050'); } else { rr(c.x - 5, c.y - 4, 10, 6, '#c04050'); rr(c.x - 2, c.y + 2, 4, 3, '#c04050'); } ctx.globalAlpha = 1; if (!f && vSenseT > 0) { ctx.strokeStyle = 'rgba(120,255,220,.8)'; ctx.strokeRect(c.x - 10, c.y - 12, 20, 18); } });
+  const items = F_TREES.filter(t => t.x > camX - 20 && t.x < camX + 340 && t.y > camY - 10 && t.y < camY + 240).map(t => ({ y: t.y, draw: () => vTree(t) }));
+  if (!open) items.push({ y: F_BUSH[3], draw: () => { for (let y = F_BUSH[1]; y < F_BUSH[3]; y += 8) { rr(F_BUSH[0] - 4, y, 26, 10, '#1f5a2a'); rr(F_BUSH[0], y + 2, 14, 6, '#2f7a3a'); } } });
+  drawPeopleAndPlayer(items);
+  if (vSenseT > 0) { const u = 1 - vSenseT / 2.6; ctx.strokeStyle = 'rgba(120,255,220,' + (0.8 * (1 - u)) + ')'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(vx, vy - 12, 10 + u * 90, 0, 6.28); ctx.stroke(); ctx.lineWidth = 1;
+    if (vSenseTo) { const a = Math.atan2(vSenseTo.y - vy, vSenseTo.x - vx), ax = vx + Math.cos(a) * 34, ay = vy - 12 + Math.sin(a) * 34; ctx.fillStyle = '#80ffe0'; ctx.beginPath(); ctx.moveTo(ax + Math.cos(a) * 8, ay + Math.sin(a) * 8); ctx.lineTo(ax + Math.cos(a + 2.4) * 6, ay + Math.sin(a + 2.4) * 6); ctx.lineTo(ax + Math.cos(a - 2.4) * 6, ay + Math.sin(a - 2.4) * 6); ctx.fill(); } }
+  ctx.fillStyle = 'rgba(10,50,30,.12)'; ctx.fillRect(camX, camY, 320, 196);
 }
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
@@ -1800,7 +1920,8 @@ function askName() { // phones: the browser's own text box (the keyboard pops up
 
 refreshTouchToggles();
 if (params.get('skipintro')) newGame({}); else toTitle();
-window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; } };
+window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; },
+  get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; } };
 requestAnimationFrame(frame);
 })();
 </script>
