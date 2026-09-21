@@ -1120,15 +1120,28 @@ function press(k) {
     let c = menuIdx % 2, r = menuIdx >> 1;
     if (k === 'left' && c > 0) c--; else if (k === 'right' && c < 1) c++; else if (k === 'up' && r > 0) r--; else if (k === 'down' && r < 3) r++;
     if (k === 'left' || k === 'right' || k === 'up' || k === 'down') {
-      const n = r * 2 + c; if (n < MENU.length) { if (n !== menuIdx) sfx('move'); menuIdx = n; curInfoMsg = ''; }
+      const n = r * 2 + c; if (n <= MENU.length) { if (n !== menuIdx) sfx('move'); menuIdx = n; curInfoMsg = ''; }
       return;
     }
     if (k === 'ok') {
+      if (menuIdx === MENU.length) { runAway(); return; }
       const mv = MENU[menuIdx], legal = C.legalMoves(state);
       if (legal.indexOf(mv) < 0) { sfx('bad'); curInfoMsg = whyNot(mv); return; }
       sfx('ok'); doTurn(mv);
     }
   }
+}
+// RUN AWAY: leave the fight. No win, no loss, no rewards. The time slot is already spent.
+function runAway() {
+  stopSpeech(); sfx('ok');
+  if (saveData && curSlot >= 0) {
+    if (foe.id === 'roku') { saveData.fled = (saveData.fled | 0) + 1; const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.meal = 0; }
+    saveData.savedAt = Date.now(); writeSlot(curSlot, saveData);
+  }
+  if (foe.id === 'roku') { if (saveData) toVillage('ROKU: RUNNING AWAY? FINE. TRAIN, THEN COME BACK.'); else toTitle(); return; }
+  if (foe.id === 'master' || foe.id === 'rival') { const r = foeReturn || { area: 'village', x: 140, y: 178 }; toPlace(r.area, r.x, r.y, foe.id === 'master' ? 'MASTER: RUNNING IS ALSO A LESSON. COME BACK.' : 'RIVAL: HA! RUN, COWARD! COME BACK WHEN YOU DARE!'); return; }
+  if (foe.id === 'boar') { toForest(vx, vy, 'YOU RAN FROM THE BOAR. IT SNORTS AND GOES BACK TO THE WOODS.'); return; }
+  toForest(40, 140, 'YOU RAN FROM THE BANDITS. TRAIN, EAT, AND TRY AGAIN.');
 }
 function whyNot(mv) {
   const M = C.CFG.moves[mv];
@@ -1209,6 +1222,13 @@ function drawPanel() {
     if (sel) textS('>', x - 9, y, '#ffe060', 1);
     textS(NAME[m], x, y, ok ? (sel ? '#ffe060' : '#ffffff') : '#666680', 1);
   });
+  { const x = 16 + 92, y = 170 + 3 * 16, sel = menuIdx === MENU.length; if (sel) textS('>', x - 9, y, '#ffe060', 1); textS('RUN AWAY', x, y, sel ? '#ffe060' : '#ff9090', 1); }
+  if (menuIdx === MENU.length) {
+    textS('RUN AWAY', 210, 166, '#ffe060', 1); textS('FREE', 210, 176, '#a0c8ff', 1);
+    ['LEAVE THE FIGHT.', 'NO WIN, NO LOSS.', foe.id === 'roku' ? 'THE TIME IS SPENT.' : 'NO REWARD.'].forEach((l, i) => textS(l, 210, 187 + i * 9, '#d8d8e8', 1));
+    if (touchMode) textS('TAP AGAIN: RUN', 210, 214, '#8888b0', 1);
+    return;
+  }
   const mv = MENU[menuIdx], M = C.CFG.moves[mv];
   textS(NAME[mv], 210, 166, '#ffe060', 1);
   const costs = [];
@@ -3183,7 +3203,7 @@ function drawBackBtn() {
     }
     else if (mode === 'menu') {
       if (state.p.collapsed) { press('ok'); return; }
-      for (let i = 0; i < MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
+      for (let i = 0; i <= MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
     }
     else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
     else if (mode === 'village' && (vMenu || vChoice) && y >= 15 && y <= 32 && x > CW - 70) { press('back'); }
