@@ -35,7 +35,7 @@
     CFG.lateReadChance = d.late; CFG.planReadChance = d.plan; CFG.difficulty = DIFFS[name] ? name : 'normal';
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
-    CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5;
+    CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5; CFG.moves.charge.gainKi = 40; CFG.moves.phantom.ki = 20; CFG.moves.phantom.strain = 15;
     CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
@@ -52,6 +52,12 @@
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
     if (Array.isArray(st.tech) && st.tech.indexOf('steady') >= 0) CFG.moves.lance.strain = Math.max(20, CFG.moves.lance.strain - 10); // the Steady Spirit technique
+    const T = Array.isArray(st.tech) ? st.tech : []; // techniques learned from missions
+    if (T.indexOf('breath') >= 0) CFG.moves.charge.gainKi = 50;                                  // Deep Breath: Charge Ki gives more
+    if (T.indexOf('quick') >= 0) { CFG.moves.phantom.ki = 15; CFG.moves.phantom.strain = 10; }   // Quick Step: Phantom Step is cheaper
+    if (T.indexOf('iron') >= 0) CFG.strainDecay += 1;                                            // Iron Body: Strain wears off faster
+    if (T.indexOf('calm') >= 0) { CFG.moves.sense.ki = 3; CFG.noSenseLie = true; }               // Calm Mind: Spirit Sense is cheap and never lies
+    if (T.indexOf('champion') >= 0) CFG.player.hp += 10;                                         // Champion: a little more life
   }
 
   // A weaker/other enemy on the same brain. Call after setDifficulty and BEFORE setStats.

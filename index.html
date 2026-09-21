@@ -86,7 +86,7 @@
     CFG.lateReadChance = d.late; CFG.planReadChance = d.plan; CFG.difficulty = DIFFS[name] ? name : 'normal';
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
-    CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5;
+    CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5; CFG.moves.charge.gainKi = 40; CFG.moves.phantom.ki = 20; CFG.moves.phantom.strain = 15;
     CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
@@ -103,6 +103,12 @@
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
     if (Array.isArray(st.tech) && st.tech.indexOf('steady') >= 0) CFG.moves.lance.strain = Math.max(20, CFG.moves.lance.strain - 10); // the Steady Spirit technique
+    const T = Array.isArray(st.tech) ? st.tech : []; // techniques learned from missions
+    if (T.indexOf('breath') >= 0) CFG.moves.charge.gainKi = 50;                                  // Deep Breath: Charge Ki gives more
+    if (T.indexOf('quick') >= 0) { CFG.moves.phantom.ki = 15; CFG.moves.phantom.strain = 10; }   // Quick Step: Phantom Step is cheaper
+    if (T.indexOf('iron') >= 0) CFG.strainDecay += 1;                                            // Iron Body: Strain wears off faster
+    if (T.indexOf('calm') >= 0) { CFG.moves.sense.ki = 3; CFG.noSenseLie = true; }               // Calm Mind: Spirit Sense is cheap and never lies
+    if (T.indexOf('champion') >= 0) CFG.player.hp += 10;                                         // Champion: a little more life
   }
 
   // A weaker/other enemy on the same brain. Call after setDifficulty and BEFORE setStats.
@@ -1558,7 +1564,7 @@ function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
-  const before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat;
+  const before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat; if (lv.g >= 20) saveData.did20x = 1;
   const got = t[stat] - before;
   trAfter((got ? stat.toUpperCase() + ' +' + got : stat.toUpperCase() + ' IS FULL') + '.  STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
 }
@@ -1604,7 +1610,7 @@ function drawTrain() {
   const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
   textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
   textS('YOU START THE FIGHT AT STRAIN ' + Math.min(80, t.fatigue), 116, 108, t.fatigue >= 50 ? '#ffa020' : '#8888b0', 1);
-  textS('DAY ' + t.day + '  ' + timeName(t), 116, 120, t.sessions ? '#ffe060' : '#ff8080', 1);
+  textS('DAY ' + t.day + '  ' + timeName(t), 116, 120, t.sessions ? '#ffe060' : '#ff8080', 1); textS('TECHNIQUES ' + techCount() + '/6', 116, 130, '#80e0ff', 1);
   wrap(trMsg, 34).slice(0, 2).forEach((l, i) => textS(l, 8, 141 + i * 10, '#c8f0ff', 1));
   panelBox();
   if (mode === 'tevent') {
@@ -1790,7 +1796,8 @@ function villagePress(k) {
     const s = V_SIGNS.find(q => Math.hypot(vx - q.x, vy - q.y) < 22); sfx('ok'); vTalk = (s.gate && gateOpen()) ? 'THE GATE IS OPEN. BE CAREFUL IN THE FOREST.' : s.text; say(vTalk);
   } else if (tg === 'person') {
     const p = curPeople()[vNearPerson()];
-    if (p.role === 'boy') boyTalk();
+    if (p.quest) questTalk(p);
+    else if (p.role === 'boy') boyTalk();
     else if (p.role === 'cook') cookTalk();
     else if (p.role === 'mom') {
       if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
@@ -1937,7 +1944,7 @@ function vTree(t) {
 function vSign(s) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 1, s.y - 12, 3, 12); ctx.fillStyle = '#c8a060'; ctx.fillRect(s.x - 8, s.y - 20, 16, 10); ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 5, s.y - 16, 10, 2); }
 function drawPeopleAndPlayer(extra) {
   const items = extra || [];
-  curPeople().forEach(p => items.push({ y: p.y, draw: () => p.dog ? vDog(p.x, p.y, p.body, p.step, p.face) : vPerson(p.x, p.y, p.body, p.hair, p.small, p.step, p.face) }));
+  curPeople().forEach(p => items.push({ y: p.y, draw: () => { if (p.dog) vDog(p.x, p.y, p.body, p.step, p.face); else vPerson(p.x, p.y, p.body, p.hair, p.small, p.step, p.face); qMark(p); } }));
   items.push({ y: vy, draw: () => { const bob = vWalk ? Math.abs(Math.sin(vWalk)) * 2 : 0, w = P.set.w, h = P.set.h; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(vx - 8), Math.round(vy - 1), 16, 3); ctx.save(); ctx.translate(Math.round(vx), Math.round(vy - bob)); ctx.scale(vFace < 0 ? -1 : 1, 1); ctx.drawImage(P.set.img.idle0, -Math.round(w / 2), -h + 2, w, h); ctx.restore(); } });
   items.sort((a, b) => a.y - b.y).forEach(i => i.draw());
 }
@@ -2099,7 +2106,7 @@ function boyTalk() {
 function questLine() {
   const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : 'QUEST: FIND THE SISTER. EAST.';
   if (q.step === 3) return 'QUEST: TELL THE BOY.';
-  if (q2Of().step === 1) return 'QUEST: GOLD FISH FOR COOK'; return '';
+  if (q2Of().step === 1) return 'QUEST: GOLD FISH FOR COOK'; return activeQuestLine();
 }
 function forestSolid(x, y) {
   if (cluesFound(questOf()) < 3 && x > F_BUSH[0] && x < F_BUSH[2] && y > F_BUSH[1] && y < F_BUSH[3]) return true;
@@ -2259,7 +2266,7 @@ const PL = (name, body, hair, zone, lines, extra) => Object.assign({ name, body,
 const STREETS = [[92, 114], [202, 224]];
 const TOWNS = {
   tavora: { name: 'TAVORA', kind: 'town', w: 560, h: 300, ground: '#5a8a3a', path: '#d0b878', sky: ['#4a6aa8', '#8ab0d8'], deco: 'farm', trees: '#3a8a3a', start: [40, 102],
-    b: [['INN', 0, 0, '#3a8a5a', '#d8c898', 'inn'], ['BAKERY', 1, 0, '#d08a30', '#ecd8a8', 'food'], ['FARM HOUSE', 2, 0, '#8a5a3a', '#d8c0a0', 'hut', { title: 'FARM HOUSE', npc: { name: 'FARMER WIFE', body: '#e0a0c0', hair: '#804020', lines: ['MY HUSBAND WORKS FROM DAWN. HE NEEDS MORE THAN BREAD!', 'A HEALTHY BODY STARTS WITH A FULL BELLY.'] } }],
+    b: [['INN', 0, 0, '#3a8a5a', '#d8c898', 'inn'], ['BAKERY', 1, 0, '#d08a30', '#ecd8a8', 'food'], ['FARM HOUSE', 2, 0, '#8a5a3a', '#d8c0a0', 'hut', { title: 'FARM HOUSE', npc: { quest: 'tavora', name: 'FARMER WIFE', body: '#e0a0c0', hair: '#804020', lines: ['MY HUSBAND WORKS FROM DAWN. HE NEEDS MORE THAN BREAD!', 'A HEALTHY BODY STARTS WITH A FULL BELLY.'] } }],
       ['MARKET', 3, 0, '#a04060', '#e0d0b0', 'hut', { title: 'MARKET', npc: { name: 'TRADER', body: '#4060a0', hair: '#c0c0c0', lines: ['I TRADE WITH EVERY TOWN ON YARDRAT. KESHIN HAS A HALL WITH 20X GRAVITY!', 'THE ROAD SOUTH-EAST IS ROUGH. SHARE YOUR FOOD WITH TRAVELLERS.'] } }],
       ['HOUSE', 4, 0, '#6a6a8a', '#d0c8b0', 'hut', { title: 'ELDER HOUSE', npc: { name: 'OLD ELDER', body: '#805090', hair: '#f0f0f0', lines: ['TAVORA FEEDS HALF OF YARDRAT.', 'ROKU WAS ONCE A STUDENT HERE. HE NEVER SAYS SO.'] } }],
       ['BARN', 0, 1, '#8a3a2a', '#c09070', 'hut', { title: 'BARN', npc: { name: 'FARMHAND', body: '#a08040', hair: '#402010', lines: ['THE BEST TRAINING IS LIFTING HAY. NO GRAVITY NEEDED.', 'A BIG FISH FROM MIRAKAI MAKES A GREAT STEW.'] } }],
@@ -2269,14 +2276,14 @@ const TOWNS = {
     meals: [meal('HONEY BUN', 1, 10, -10), meal('FARM STEW', 1, 20, 5), meal('HARVEST FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'r2' }] },
   keshin: { name: 'KESHIN', kind: 'town', w: 560, h: 300, ground: '#7a7a72', path: '#a89870', sky: ['#4a4a6a', '#8a7a8a'], deco: 'rocks', trees: '#5a6a4a', start: [40, 102],
     b: [['INN', 0, 0, '#6a6a7a', '#c8c0a8', 'inn'], ["MINERS' MESS", 1, 0, '#a05a30', '#d8c8a8', 'food'], ['GRAVITY HALL', 2, 0, '#404050', '#a0a0b0', 'gym'], ['FORGE', 3, 0, '#802a2a', '#b8a898', 'hut', { title: 'FORGE', npc: { name: 'SMITH', body: '#a04030', hair: '#202020', lines: ['I FORGE WEIGHTS FOR THE HALL. 20X GRAVITY HURTS!', 'STRAIN IS THE PRICE OF POWER. PAY IT SLOWLY.'] } }],
-      ['FOREMAN', 4, 0, '#8a6a3a', '#d0c0a0', 'hut', { title: 'FOREMAN HOUSE', npc: { name: 'FOREMAN', body: '#c08030', hair: '#403020', lines: ['THE QUARRY NEVER SLEEPS.', 'ORAYA CITY BUYS ALL OUR STONE. THEY HAVE A GRAND ARENA.'] } }],
+      ['FOREMAN', 4, 0, '#8a6a3a', '#d0c0a0', 'hut', { title: 'FOREMAN HOUSE', npc: { quest: 'keshin', name: 'FOREMAN', body: '#c08030', hair: '#403020', lines: ['THE QUARRY NEVER SLEEPS.', 'ORAYA CITY BUYS ALL OUR STONE. THEY HAVE A GRAND ARENA.'] } }],
       ['HOUSE', 0, 1, '#5a5a6a', '#c8c0b0', 'hut', { title: 'MINER HOUSE', npc: { name: 'MINER', body: '#707890', hair: '#101010', lines: ['THE ROCKS HERE ARE HEAVY. SO IS THE HALL.', 'DO NOT USE 20X GRAVITY WHEN YOU ARE TIRED!'] } }]],
     people: [PL('MINER', '#707890', '#101010', 'r0', ['THE ROCKS HERE ARE HEAVY.', 'TRAIN IN THE HALL. THEN TRY THE ROAD.']), PL('GUARD', '#a04030', '#303030', 'r1', ['THE ROAD TO ORAYA CITY NEEDS 3 MILESTONES.', 'STRONG FIGHTERS GATHER IN THE CITY.'])],
     signs: [{ x: 30, y: 112, text: 'KESHIN. QUARRY TOWN. HOME OF THE GRAVITY HALL.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
     meals: [meal('ROCK BREAD', 1, 14, -5), meal('MINER STEW', 1, 24, 12), meal('MOUNTAIN FEAST', 2, 34, 24)], exits: [{ side: 'w', row: 0, to: 'r2' }, { side: 'e', row: 0, to: 'r3' }] },
   mirakai: { name: 'MIRAKAI', kind: 'town', w: 560, h: 330, ground: '#6a9a6a', path: '#d8c898', sky: ['#4a80b8', '#9ad0e8'], deco: 'sea', trees: '#3a9a5a', start: [40, 102], deep: true,
     water: [0, 250, 560, 330], dock: { x: 300, y: 262, wx: 300, wy: 292 },
-    b: [['INN', 0, 0, '#3a7a9a', '#d8d0b0', 'inn'], ['FISH GRILL', 1, 0, '#c07a30', '#e8d8b0', 'food'], ['NET HOUSE', 2, 0, '#4a8a7a', '#d0d0b8', 'hut', { title: 'NET HOUSE', npc: { name: 'FISHERMAN', body: '#4080c0', hair: '#402010', lines: ['THE DEEP WATER OFF THE DOCK HOLDS THE BIG ONES.', 'A GOLD FISH BRINGS LUCK. I SAW ONE ONCE.'] } }],
+    b: [['INN', 0, 0, '#3a7a9a', '#d8d0b0', 'inn'], ['FISH GRILL', 1, 0, '#c07a30', '#e8d8b0', 'food'], ['NET HOUSE', 2, 0, '#4a8a7a', '#d0d0b8', 'hut', { title: 'NET HOUSE', npc: { quest: 'mirakai', name: 'FISHERMAN', body: '#4080c0', hair: '#402010', lines: ['THE DEEP WATER OFF THE DOCK HOLDS THE BIG ONES.', 'A GOLD FISH BRINGS LUCK. I SAW ONE ONCE.'] } }],
       ['BOAT SHOP', 3, 0, '#8a5a3a', '#d8c8a0', 'hut', { title: 'BOAT SHOP', npc: { name: 'BOATWRIGHT', body: '#a08050', hair: '#805020', lines: ['ONE DAY I WILL BUILD A BOAT TO LEAVE YARDRAT.', 'THE SEA ROAD TO LUMORA IS QUIET.'] } }],
       ['HOUSE', 4, 0, '#6a7a9a', '#d8d0b8', 'hut', { title: 'HOUSE', npc: { name: 'SAILOR', body: '#3060a0', hair: '#e0e0e0', lines: ['THE LAKE IS DEEP. THE FISH ARE STRONG.', 'FOCUS! THE FISH WAITS FOR A CALM MIND.'] } }]],
     people: [PL('FISHER', '#4080c0', '#402010', 'r1', ['FISH HERE ARE BIGGER THAN IN SORYA.', 'SHH! I AM WAITING FOR A BIG ONE.']), PL('GIRL', '#e06080', '#f0c040', 'r0', ['THE SEA IS SO BIG!', 'DO YOU LIKE FISH?']), PL('DOG', '#c8a080', '#c8a080', 'r0', ['WOOF!'], { dog: true })],
@@ -2285,13 +2292,13 @@ const TOWNS = {
   lumora: { name: 'LUMORA', kind: 'town', w: 560, h: 300, ground: '#5a5a9a', path: '#b8a8d8', sky: ['#3a2a6a', '#8a6ab0'], deco: 'temple', trees: '#4a4a8a', start: [40, 102],
     b: [['INN', 0, 0, '#4a3a8a', '#d0c8e8', 'inn'], ['TEA HOUSE', 1, 0, '#8a5a9a', '#e8d8f0', 'food'], ['MEDITATION', 2, 0, '#3a6a8a', '#d0e0f0', 'meditate'], ['SPIRIT TEMPLE', 3, 0, '#5a2a8a', '#e8e0f8', 'master'],
       ['LIBRARY', 4, 0, '#6a4a7a', '#e0d8e8', 'hut', { title: 'LIBRARY', npc: { name: 'SCHOLAR', body: '#6060a0', hair: '#d0d0d0', lines: ['SPIRIT SENSE SHOWS THE FUTURE. BUT ONLY IF YOUR MIND IS STILL.', 'THE MASTER TEACHES A TECHNIQUE THAT LETS YOU CARRY MORE POWER.'] } }],
-      ['HOUSE', 0, 1, '#5a5a9a', '#d8d0e8', 'hut', { title: 'MONK HOUSE', npc: { name: 'MONK', body: '#c08040', hair: '#101010', lines: ['BREATHE IN. BREATHE OUT.', 'THE TEMPLE MASTER NEVER RUSHES. HE WAITS. AND HE LIES TO YOUR SENSE.'] } }]],
+      ['HOUSE', 0, 1, '#5a5a9a', '#d8d0e8', 'hut', { title: 'MONK HOUSE', npc: { quest: 'lumora', name: 'MONK', body: '#c08040', hair: '#101010', lines: ['BREATHE IN. BREATHE OUT.', 'THE TEMPLE MASTER NEVER RUSHES. HE WAITS. AND HE LIES TO YOUR SENSE.'] } }]],
     people: [PL('MONK', '#c08040', '#101010', 'r0', ['BREATHE IN. BREATHE OUT.', 'STRAIN IS LEARNED BY LISTENING TO YOUR BODY.']), PL('CHILD', '#8060c0', '#202020', 'r1', ['THE LIGHTS ARE SPIRITS!', 'THE MASTER IS SCARY BUT KIND.'], { small: true })],
     signs: [{ x: 30, y: 112, text: 'LUMORA. THE SPIRIT TOWN. SPEAK SOFTLY.' }, { x: 528, y: 112, text: 'EAST: THE ROAD TO ORAYA CITY. YOU NEED 3 MILESTONES.' }],
     meals: [meal('TEMPLE TEA', 1, 0, -25), meal('LOTUS SOUP', 1, 12, -15), meal('SPIRIT FEAST', 2, 30, 10)], exits: [{ side: 'w', row: 0, to: 'r5' }, { side: 'e', row: 0, to: 'r6' }] },
   oraya: { name: 'ORAYA CITY', kind: 'town', w: 700, h: 320, ground: '#8a8a94', path: '#b8b8c0', sky: ['#5a6a9a', '#a8b8d8'], deco: 'city', trees: '#4a8a5a', start: [40, 102],
     b: [['INN', 0, 0, '#3a5a9a', '#d8d8e0', 'inn'], ['CITY DINER', 1, 0, '#c07a30', '#ecdcc0', 'food'], ['GRAND ARENA', 2, 0, '#a02a2a', '#d8c8b0', 'rival'], ['MUSEUM', 3, 0, '#5a5a7a', '#e0e0e8', 'hut', { title: 'MUSEUM', npc: { name: 'CURATOR', body: '#604080', hair: '#c0c0c0', lines: ['THIS SPEAR BELONGED TO THE FIRST YARDRAT WARRIOR.', 'THE MASTER OF LUMORA AND THE CHAMPION OF ORAYA ONCE TRAINED TOGETHER.'] } }],
-      ['GUILD', 4, 0, '#2a5a8a', '#d0d8e0', 'hut', { title: 'FIGHTERS GUILD', npc: { name: 'GUILD CLERK', body: '#2060a0', hair: '#303030', lines: ['THE RIVAL FIGHTS EVERY CHALLENGER IN THE GRAND ARENA.', 'HE IS PROUD AND ANGRY. HE GETS STRONGER WHEN HE IS HURT.'] } }],
+      ['GUILD', 4, 0, '#2a5a8a', '#d0d8e0', 'hut', { title: 'FIGHTERS GUILD', npc: { quest: 'oraya', name: 'GUILD CLERK', body: '#2060a0', hair: '#303030', lines: ['THE RIVAL FIGHTS EVERY CHALLENGER IN THE GRAND ARENA.', 'HE IS PROUD AND ANGRY. HE GETS STRONGER WHEN HE IS HURT.'] } }],
       ['TOWER', 5, 0, '#6a2a5a', '#d8c8d8', 'hut', { title: 'TOWER', npc: { name: 'ASTRONOMER', body: '#4a3a8a', hair: '#f0f0f0', lines: ['THE STARS OVER YARDRAT ARE CHANGING.', 'SOMETHING IS COMING. I CAN SEE IT IN THE SKY.'] } }],
       ['MARKET', 0, 1, '#a04060', '#e0d0b8', 'hut', { title: 'CITY MARKET', npc: { name: 'MERCHANT', body: '#c08030', hair: '#403020', lines: ['GOODS FROM EVERY TOWN! FISH FROM MIRAKAI, BREAD FROM TAVORA!', 'A FIGHTER EATS WELL BEFORE THE ARENA.'] } }],
       ['HOUSE', 1, 1, '#5a7a9a', '#d8d8e0', 'hut', { title: 'CITY HOUSE', npc: { name: 'CITIZEN', body: '#607090', hair: '#503020', lines: ['THE ARENA IS LOUD ON TOURNAMENT DAY.', 'I BET ON THE RIVAL. HE NEVER GIVES UP!'] } }]],
@@ -2356,7 +2363,7 @@ function restNow() {
 function meditateNow() {
   const t = trainOf();
   if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return; }
-  t.sessions--; t.fatigue = Math.max(0, t.fatigue - 15); const gain = t.focus < statCapOf('focus');
+  t.sessions--; t.fatigue = Math.max(0, t.fatigue - 15); const gain = t.focus < statCapOf('focus'); saveData.meditations = (saveData.meditations | 0) + 1; // for the Lumora mission
   if (gain) t.focus++; trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU MEDITATED. ' + (gain ? 'FOCUS +1. ' : 'FOCUS IS AT ITS CAP. ') + 'STRAIN -15.'; say(vMsg);
 }
 function enterHut(b) {
@@ -2481,6 +2488,37 @@ function drawTown() {
   if (T.kind === 'route') { ctx.fillStyle = 'rgba(10,30,20,.10)'; ctx.fillRect(camX, camY, CW, 196); }
   if (T.deco === 'temple') { ctx.fillStyle = 'rgba(90,60,150,.12)'; ctx.fillRect(camX, camY, CW, 196); }
 }
+// ================= one mission in every town: each uses a different part of the game, and gives a technique =================
+const TECHS = { steady: 'STEADY SPIRIT', breath: 'DEEP BREATH', quick: 'QUICK STEP', iron: 'IRON BODY', calm: 'CALM MIND', champion: 'CHAMPION' };
+const QUESTS = {
+  tavora:  { item: 'meat', tech: 'breath', line: 'QUEST: BOAR MEAT TAVORA', ask: 'FARMER WIFE: MY STEW NEEDS BOAR MEAT. HUNT ONE IN THE FOREST NEAR SORYA!', remind: 'FARMER WIFE: STILL NO BOAR MEAT. TRY THE FOREST NEAR SORYA!', done: 'FARMER WIFE: WONDERFUL! TAKE MY DEEP BREATH. (TECHNIQUE: CHARGE KI GIVES +50)' },
+  mirakai: { item: 'big', tech: 'quick', line: 'QUEST: BIG FISH MIRAKAI', ask: 'FISHERMAN: CATCH A BIG FISH AT THE DEEP DOCK AND BRING IT TO ME!', remind: 'FISHERMAN: THE BIG ONES BITE AT THE DEEP DOCK. BE PATIENT.', done: 'FISHERMAN: WHAT A CATCH! TAKE MY QUICK STEP. (TECHNIQUE: PHANTOM STEP COSTS LESS)' },
+  keshin:  { tech: 'iron', line: 'QUEST: 20X GRAVITY KESHIN', ask: 'FOREMAN: CAN YOU TAKE 20X GRAVITY IN OUR HALL? TRY ONE TRAINING AT 20X!', remind: 'FOREMAN: THE GRAVITY HALL IS NEXT DOOR. ONE TRAINING AT 20X!', done: 'FOREMAN: YOU DID IT! TAKE IRON BODY. (TECHNIQUE: STRAIN FADES FASTER)' },
+  lumora:  { tech: 'calm', line: 'QUEST: MEDITATE 3X LUMORA', ask: 'MONK: A CALM MIND SEES THE TRUTH. MEDITATE 3 TIMES IN THE HALL.', remind: 'MONK: MEDITATE IN THE HALL. THREE TIMES. BREATHE.', done: 'MONK: YOUR MIND IS STILL. (TECHNIQUE: CALM MIND. SENSE IS CHEAP AND TRUE)' },
+  oraya:   { tech: 'champion', line: 'QUEST: BEAT MASTER+RIVAL', ask: 'GUILD CLERK: BEAT THE SPIRIT MASTER AND THE RIVAL, THEN COME BACK. BE A CHAMPION!', remind: 'GUILD CLERK: THE MASTER IS IN LUMORA. THE RIVAL IS IN THE ARENA.', done: 'GUILD CLERK: CHAMPION OF YARDRAT! (TECHNIQUE: +10 HP. CHAPTER 1 COMPLETE!)' } };
+function questState(id) { trainOf(); return (saveData.quests && saveData.quests[id]) | 0; }
+function questReady(id) {
+  const t = trainOf(), Q = QUESTS[id];
+  if (Q.item) return t.inv.indexOf(Q.item) >= 0;
+  if (id === 'keshin') return !!saveData.did20x;
+  if (id === 'lumora') return (saveData.meditations | 0) >= 3;
+  if (id === 'oraya') return !!(saveData.tech && saveData.tech.indexOf('steady') >= 0 && saveData.rivalDone);
+  return false;
+}
+function activeQuestLine() { const ids = Object.keys(QUESTS); for (let i = 0; i < ids.length; i++) if (questState(ids[i]) === 1) return questReady(ids[i]) ? 'QUEST: TURN IN ' + ids[i].toUpperCase() : QUESTS[ids[i]].line; return ''; }
+function techCount() { return (saveData && saveData.tech ? saveData.tech.length : 0); }
+function questTalk(p) {
+  const id = p.quest, Q = QUESTS[id], t = trainOf(); saveData.quests = saveData.quests || {}; const st = saveData.quests[id] | 0;
+  if (st === 0) { saveData.quests[id] = 1; trSave(); sfx('ok'); vTalk = Q.ask; }
+  else if (st === 1) {
+    if (questReady(id)) {
+      if (Q.item) t.inv.splice(t.inv.indexOf(Q.item), 1);
+      saveData.quests[id] = 2; saveData.tech = saveData.tech || []; if (saveData.tech.indexOf(Q.tech) < 0) saveData.tech.push(Q.tech); trSave(); sfx('win'); vFlash = .4; vTalk = Q.done;
+    } else { sfx('ok'); vTalk = Q.remind; }
+  } else { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; }
+  say(vTalk);
+}
+function qMark(p) { if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
   else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
