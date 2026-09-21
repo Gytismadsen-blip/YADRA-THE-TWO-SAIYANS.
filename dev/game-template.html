@@ -813,7 +813,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', v:'zoom', V:'zoom' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', b:'bag', B:'bag', v:'zoom', V:'zoom' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -838,6 +838,7 @@ function press(k) {
   if (k === 'full') { toggleFullscreen(); return; }
   if (k === 'map') { toggleMap(); return; }
   if (k === 'log') { toggleLog(); return; }
+  if (k === 'bag') { toggleBag(); return; }
   if (k === 'zoom' && mode !== 'map') return;
   if (k === 'mute') { setMuted(!muted); if (!muted) sfx('ok'); return; }
   if (k === 'voice') { setVoice(!voiceOn); return; }
@@ -1062,6 +1063,7 @@ function render() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
   if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
   if (mode === 'log') { ctx.save(); ctx.translate(OFFX, 0); drawLog(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
+  if (mode === 'bag') { ctx.save(); ctx.translate(OFFX, 0); drawBag(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
   if (mode === 'village') { drawVillage(); ctx.save(); ctx.translate(CW - W, 0); drawToggles(); ctx.restore(); return; } // buttons sit at the right end of the wide box
   ctx.save(); ctx.translate(OFFX, 0);
   if (OFFX > 0) drawSides();
@@ -1817,7 +1819,7 @@ function drawVillage() {
   const wide = CW > 320, fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, wide ? 158 : 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, wide ? 220 : 252, 3, '#ffb060', 1);
   textS(wide ? '[G] MAP' : 'MAP', wide ? CW - 48 : CW - 22, 3, '#80e0ff', 1);
-  if (wide) { const lx = CW - 48 - 6 - textW('[L] LOG'), pw = textW(placeName()), px = lx - 10 - pw, fedEnd = t.meal ? 220 + textW('FED +' + t.meal) + 8 : 0; textS('[L] LOG', lx, 3, '#ffd080', 1); if (px > fedEnd + 4) textS(placeName(), px, 3, '#c8f0ff', 1); } else if (!t.meal) textS('LOG', 232, 3, '#ffd080', 1);
+  if (wide) { const lx = CW - 48 - 6 - textW('[L] LOG'), pw = textW(placeName()), px = lx - 10 - pw, fedEnd = t.meal ? 220 + textW('FED +' + t.meal) + 8 : 0; textS('[L] LOG', lx, 3, '#ffd080', 1); textS('[B] BAG', lx - 50, 3, '#ffd080', 1); if (px - 50 > fedEnd + 4) textS(placeName(), px - 50, 3, '#c8f0ff', 1); } else if (!t.meal) textS('LOG', 232, 3, '#ffd080', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'TAP' : 'Z';
@@ -2610,6 +2612,32 @@ function qMark(p) {
   if (p.role === 'boy') { const st = questOf().step; if (st === 0 || st === 3) textS(st === 3 ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 30, st === 3 ? '#80ff80' : '#ffe060', 2); return; }
   if (p.side) { const st = sideSt(p.side), to = p.sideRole === 'to'; if (to ? st === 1 : (st === 0 || (st === 1 && SIDES[p.side].opts))) textS(to ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, to ? '#80ff80' : '#ffe060', 2); return; }
   if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
+// ================= the bag: everything you carry =================
+const ING_USE = { herb: 'FOR HERB TEA: FOCUS', root: 'FOR ROOT STEW: BODY', honey: 'FOR THE WARRIOR PLATE' };
+function toggleBag() {
+  if (mode === 'bag') { mode = 'village'; sfx('move'); return; }
+  if (mode === 'log') { mode = 'bag'; sfx('ok'); return; }
+  if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice) { mode = 'bag'; sfx('ok'); }
+}
+function bagPress(k) { if (k === 'back') { mode = 'village'; sfx('move'); } return true; }
+function drawBag() {
+  const t = trainOf(), g = ingOf(); ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, CW, H); flatBg();
+  center('BAG', 4, '#ffd040', 2); const hint = touchMode ? 'LOG >' : 'L: LOG'; textS(hint, W - 6 - textW(hint), 4, '#80e0ff', 1);
+  const head = (tx, y) => { ctx.fillStyle = '#1e1e48'; ctx.fillRect(6, y - 2, W - 12, 11); textS(tx, 10, y, '#ffe060', 1); };
+  textS('COINS ' + coinsOf(), 10, 24, '#ffd040', 1); textS('DAY ' + t.day + ' ' + timeName(t), W - 10 - textW('DAY ' + t.day + ' ' + timeName(t)), 24, '#c8c8e8', 1);
+  head('FISH AND MEAT  ' + t.inv.length + '/' + BAG_MAX, 36);
+  if (!t.inv.length) textS('EMPTY. GO FISHING OR HUNT A BOAR.', 12, 49, '#8888a8', 1);
+  t.inv.forEach((k, i) => { const F = FISH[k]; textS(F.n, 12, 49 + i * 10, '#ffffff', 1); textS('+' + F.hp + ' HP  STRAIN ' + (F.str > 0 ? '+' : '') + F.str + '  SELL ' + SELL[k], 128, 49 + i * 10, '#a8c8e8', 1); });
+  head('INGREDIENTS', 92);
+  Object.keys(ING).forEach((k, i) => { textS(ING[k].n + '  x' + g[k], 12, 105 + i * 10, g[k] ? '#ffffff' : '#8888a8', 1); textS(ING_USE[k], 150, 105 + i * 10, '#a8c8e8', 1); });
+  head('FOOD AND BUFF', 138);
+  textS(t.meal ? 'FED: +' + t.meal + ' HP IN THE NEXT FIGHT' : 'NOT FED. EAT BEFORE A FIGHT.', 12, 151, t.meal ? '#ffb060' : '#8888a8', 1);
+  textS(buffLine() || 'NO BUFF TODAY. COOK A DISH.', 12, 161, buffLine() ? '#80ff80' : '#8888a8', 1);
+  head('TECHNIQUES', 174);
+  const tech = (saveData.tech || []).map(k => TECHS[k]).filter(Boolean); textS(tech.length ? wrap(tech.join(', '), 50)[0] : 'NONE YET. DO THE TOWN MISSIONS.', 12, 187, tech.length ? '#ffffff' : '#8888a8', 1);
+  textS('BODY ' + t.body + '   KI ' + t.ki + '   FOCUS ' + t.focus + '   CAP ' + statCap(), 12, 203, '#c8f0c8', 1);
+  textS(touchMode ? 'TAP TOP RIGHT: LOG' : 'X: BACK  L: LOG', 8, 226, '#8888b0', 1);
+}
 // ================= mission log + missions without fighting (you choose HOW to solve them) =================
 const SIDES = {
   crate: { title: 'STUCK CRATE', goal: 'THE FARMHAND IN THE BARN IN TAVORA NEEDS HELP MOVING A CRATE.',
@@ -2719,6 +2747,7 @@ function logRows() { const rk = m => (m.st === 2 ? 2 : 0) + (m.kind === 'MAIN' ?
 const LOG_VIS = 7; let logSel = 0, logTop = 0, logMsg = '';
 function toggleLog() {
   if (mode === 'log') { mode = 'village'; sfx('move'); return; }
+  if (mode === 'bag') { mode = 'log'; logSel = 0; logTop = 0; logMsg = ''; sfx('ok'); return; }
   if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice) { mode = 'log'; logSel = 0; logTop = 0; logMsg = ''; sfx('ok'); }
 }
 function logPress(k) {
@@ -2735,7 +2764,7 @@ function logPress(k) {
 function drawLog() {
   const rows = logRows(); trainOf();
   ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, CW, H); flatBg();
-  center('MISSIONS', 5, '#ffd040', 2);
+  center('MISSIONS', 5, '#ffd040', 2); { const hb = touchMode ? 'BAG >' : 'B: BAG'; textS(hb, W - 6 - textW(hb), 4, '#80e0ff', 1); }
   logSel = Math.max(0, Math.min(logSel, rows.length - 1)); if (logSel < logTop) logTop = logSel; if (logSel >= logTop + LOG_VIS) logTop = logSel - LOG_VIS + 1;
   if (!rows.length) center('NO MISSIONS YET.', 90, '#c8c8e8', 1);
   for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) {
@@ -2772,6 +2801,7 @@ function menuPress(k) {
   if (mode === 'village') return villagePress(k);
   if (mode === 'map') return mapPress(k);
   if (mode === 'log') return logPress(k);
+  if (mode === 'bag') return bagPress(k);
   if (mode === 'title') {
     if (k === 'up') { titleIdx = (titleIdx + 3) % 4; sfx('move'); }
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
@@ -2846,7 +2876,7 @@ const held = { up: false, down: false, left: false, right: false };
 let touchMode = false;
 addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k && held[k] !== undefined) held[k] = false; });
 addEventListener('blur', () => { for (const k in held) held[k] = false; });
-const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'log', 'over'];
+const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'log', 'bag', 'over'];
 function drawBackBtn() {
   if (!touchMode || BACK_MODES.indexOf(mode) < 0) return;
   const label = mode === 'over' ? '< MENU' : '< BACK';
@@ -2887,6 +2917,7 @@ function drawBackBtn() {
     }
     else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
     else if (mode === 'village' && vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? inR(2, 198 + i * 19, CW - 4, 19) : inR(2, 199 + i * 13, CW - 4, 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
+    else if (mode === 'bag' || (mode === 'log' && y < 14 && x > W - 70)) { if (y < 14 && x > W - 70) press(mode === 'log' ? 'bag' : 'log'); }
     else if (mode === 'log') { const rows = logRows(); for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) if (inR(2, 21 + i * 14, W - 4, 14)) { if (logSel === logTop + i) press('ok'); else { logSel = logTop + i; sfx('move'); } return; } }
     else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
   }
