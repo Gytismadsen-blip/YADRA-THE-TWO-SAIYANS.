@@ -1369,7 +1369,7 @@ function trainOf() {
   t.inv = Array.isArray(t.inv) ? t.inv.filter(k => FISH[k]).slice(0, BAG_MAX) : []; t.pity = n(t.pity, 0, 99, 0); t.day = n(t.day, 1, 999, 1); t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
   return t;
 }
-function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
+function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
 function statCap() { return Math.min(STAT_MAX, 4 + 2 * milestones()); }
 const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left today: 3 = morning ... 0 = night
 function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
@@ -1577,7 +1577,7 @@ function villagePress(k) {
     if (k === 'up') { vMenu.idx = (vMenu.idx + N - 1) % N; sfx('move'); }
     else if (k === 'down') { vMenu.idx = (vMenu.idx + 1) % N; sfx('move'); }
     else if (k === 'back') { vMenu = null; sfx('move'); }
-    else if (k === 'ok') vEat(menuItems()[vMenu.idx]);
+    else if (k === 'ok') vPick(menuItems()[vMenu.idx]);
     return true;
   }
   if (k === 'back') { if (area !== 'village') { exitRoom(); return true; } sfx('move'); toTitle(); return true; }
@@ -1602,7 +1602,7 @@ function villagePress(k) {
   } else if (tg === 'person') {
     const p = curPeople()[vNearPerson()];
     if (p.role === 'boy') boyTalk();
-    else if (p.role === 'cook') { sfx('ok'); vMenu = { idx: 0 }; }
+    else if (p.role === 'cook') cookTalk();
     else if (p.role === 'mom') {
       if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
       else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = 'MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)'; }
@@ -1717,7 +1717,7 @@ function drawVillage() {
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
-    const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', 'MEALS, OR GRILL A FISH FREE.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, '']) : ['', ''];
+    const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', q2Of().step === 1 ? 'HE WANTS A GOLD FISH.' : 'MEALS, OR GRILL A FISH FREE.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, p.role === 'boy' && questOf().step >= 4 ? 'FRIEND. BOND ' + bondOf().boy + '/5' : '']) : ['', ''];
     const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
@@ -1776,12 +1776,13 @@ function boyTalk() {
   if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! PLEASE FIND HER! (QUEST STARTED. THE EAST GATE IS OPEN.)'; }
   else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
   else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2, TRAINING CAP +2)'; }
-  else vTalk = 'BOY: WHEN I GROW UP I WILL BE STRONG LIKE YOU!';
+  else { sfx('ok'); vMenu = { idx: 0, kind: 'friend' }; return; }
   say(vTalk);
 }
 function questLine() {
   const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : "QUEST: FIND THE BOY'S SISTER. GO EAST.";
-  if (q.step === 3) return 'QUEST: TELL THE BOY THE GOOD NEWS.'; return '';
+  if (q.step === 3) return 'QUEST: TELL THE BOY THE GOOD NEWS.';
+  if (q2Of().step === 1) return 'QUEST: BRING THE COOK A GOLD FISH.'; return '';
 }
 function forestSolid(x, y) {
   if (cluesFound(questOf()) < 3 && x > F_BUSH[0] && x < F_BUSH[2] && y > F_BUSH[1] && y < F_BUSH[3]) return true;
@@ -1894,7 +1895,42 @@ function drawFishUi() {
   textS(f.phase === 'wait' ? key + ' TOO EARLY SCARES IT. X: STOP' : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
 }
 function fishItems() { return trainOf().inv.map((k, i) => ({ fish: k, idx: i, n: FISH[k].n, short: '+' + FISH[k].hp + ' HP  STR ' + (FISH[k].str > 0 ? '+' : '') + FISH[k].str })); }
-function menuItems() { return MEALS.concat(fishItems()); }
+function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); return MEALS.concat(q2Of().step >= 2 ? [GOLDEN] : []).concat(fishItems()); }
+// ================= mission 2 (the cook's golden ramen) + the boy as your first friend =================
+const GOLDEN = { n: 'GOLDEN RAMEN', turns: 1, hp: 20, str: -25, d: '+20 HP FIGHT, STRAIN -25', short: '+20 HP  STR -25' };
+const BOY_TALK = ['BOY: I AM STILL SCARED OF THE FOREST. BUT YOU WERE BRAVE.', 'BOY: MY SISTER SAYS I TALK TOO MUCH.', 'BOY: I WANT TO LEARN A KI BLAST. CAN YOU SHOW ME?', 'BOY: WHEN I FEEL SCARED, I THINK OF YOU.', 'BOY: ONE DAY WE WILL TRAIN TOGETHER AGAINST ROKU!', 'BOY: YOU ARE MY BEST FRIEND!'];
+function q2Of() { trainOf(); const q = saveData.q2 || (saveData.q2 = { step: 0 }); q.step = Math.max(0, Math.min(2, q.step | 0)); return q; }
+function bondOf() { trainOf(); const b = saveData.bond || (saveData.bond = { boy: 0, talkDay: 0 }); b.boy = Math.max(0, Math.min(5, b.boy | 0)); return b; }
+function openFoodMenu() { vMenu = { idx: 0, kind: 'food' }; }
+function cookTalk() {
+  const q = q2Of(), t = trainOf(), gi = t.inv.indexOf('gold');
+  if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'COOK: I DREAM OF A GOLDEN RAMEN. BRING ME A GOLD FISH FROM THE LAKE! (QUEST STARTED)'; say(vTalk); vAfterTalk = openFoodMenu; }
+  else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU, TRAINING CAP +2)'; say(vTalk); vAfterTalk = openFoodMenu; }
+  else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: BRING THE COOK A GOLD FISH.'; openFoodMenu(); }
+}
+function friendItems() {
+  const t = trainOf(), b = bondOf();
+  return [{ act: 'talk', n: 'TALK', short: 'BOND ' + b.boy + '/5' }, { act: 'give', n: 'GIVE A FISH', short: 'BAG ' + t.inv.length + '  BOND +1' }, { act: 'spar', n: 'SPAR', short: '1 TIME  +1 STAT' }];
+}
+function bondUp(n) { const b = bondOf(), before = b.boy; b.boy = Math.min(5, b.boy + n); return before < 5 && b.boy >= 5 ? ' (BEST FRIENDS! TRAINING CAP +2)' : ''; }
+function friendPick(m) {
+  const t = trainOf(), b = bondOf();
+  if (m.act === 'talk') {
+    let extra = ''; if (b.talkDay !== t.day) { b.talkDay = t.day; extra = bondUp(1); }
+    trSave(); vMenu = null; sfx('ok'); vTalk = BOY_TALK[b.boy] + extra; say(vTalk); return;
+  }
+  if (m.act === 'give') {
+    if (!t.inv.length) { sfx('bad'); vMsg = 'YOUR BAG IS EMPTY.'; vMenu = null; return; }
+    const kind = t.inv.shift(), extra = bondUp(kind === 'gold' ? 2 : 1); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
+    vTalk = 'BOY: A ' + FISH[kind].n + '! THANK YOU! (BOND ' + b.boy + '/5)' + extra; say(vTalk); return;
+  }
+  if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP AT HOME.'; vMenu = null; return; }
+  const cap = statCap(), names = ['body', 'ki', 'focus'], low = names.filter(k => t[k] < cap).sort((a, c) => t[a] - t[c])[0];
+  t.sessions--; t.fatigue = Math.min(99, t.fatigue + 6); if (low) t[low]++;
+  const extra = bondUp(1); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
+  vTalk = 'YOU SPARRED WITH THE BOY. ' + (low ? low.toUpperCase() + ' +1. ' : 'ALL STATS AT THE CAP. ') + 'STRAIN +6. (BOND ' + b.boy + '/5)' + extra; say(vTalk);
+}
+function vPick(m) { if (vMenu && vMenu.kind === 'friend') friendPick(m); else vEat(m); }
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
   else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
