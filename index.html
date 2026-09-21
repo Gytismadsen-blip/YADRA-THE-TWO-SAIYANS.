@@ -11,7 +11,12 @@
   body.touch.portrait #wrap{align-items:flex-start;height:auto}
   canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;outline:none;touch-action:none}
   #pad{display:none;position:fixed;left:0;right:0;bottom:0;height:250px;z-index:5;pointer-events:none}
-  body.touch #pad{display:block}
+  body.touch #pad{display:none}
+  html,body.touch{touch-action:none}
+  #joy{display:none;position:fixed;z-index:8;pointer-events:none;width:0;height:0}
+  #joyBase{position:absolute;width:112px;height:112px;left:-56px;top:-56px;border-radius:50%;border:3px solid rgba(255,255,255,.4);background:rgba(255,255,255,.10)}
+  #joyKnob{position:absolute;width:50px;height:50px;left:-25px;top:-25px;border-radius:50%;background:rgba(255,255,255,.55);border:2px solid rgba(255,255,255,.8)}
+  #touchHint{display:none;position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom));justify-content:space-between;padding:0 22px;font:bold 13px monospace;color:rgba(255,255,255,.32);pointer-events:none;z-index:4}
   #pad button{position:absolute;pointer-events:auto;touch-action:none;border:3px solid #e8e0c8;background:rgba(20,20,60,.72);color:#ffe060;font:bold 22px monospace;border-radius:14px;padding:0;-webkit-appearance:none;appearance:none}
   #pad button.on{background:rgba(255,224,96,.9);color:#101030}
   #pad button.off{opacity:.45}
@@ -41,6 +46,8 @@
   <button id="b-back" data-k="back">BACK</button><button id="b-ok" data-k="ok">OK</button>
   <button id="btnSnd" data-k="mute">SOUND</button><button id="btnVoice" data-k="voice">VOICE</button>
 </div>
+<div id="joy"><div id="joyBase"></div><div id="joyKnob"></div></div>
+<div id="touchHint"><span>DRAG LEFT SIDE: MOVE</span><span>TAP RIGHT SIDE: ACT</span></div>
 <script>
 // Yadra combat rules: pure logic, no drawing. Same file is tested in Node and later inlined in index.html.
 (function (root) {
@@ -305,6 +312,7 @@
 'use strict';
 const C = window.YadraCombat;
 const cv = document.getElementById('c');
+const touchHintEl = document.getElementById('touchHint');
 const ctx = cv.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const W = 320, H = 240;
@@ -320,9 +328,7 @@ function fit() {
   const nw = touch ? 320 : 427; // computers get a 16:9 view, phones keep 4:3
   if (cv.width !== nw) { cv.width = nw; ctx.imageSmoothingEnabled = false; }
   CW = nw; OFFX = Math.round((CW - W) / 2);
-  let availH = innerHeight;
-  if (touch && portrait) availH = Math.max(140, innerHeight - Math.min(250, Math.round(innerHeight * .36)));
-  const availW = touch && !portrait ? Math.max(200, innerWidth - 300) : innerWidth; // leave 150px each side for the buttons
+  const availH = innerHeight, availW = innerWidth; // no buttons to make room for: the game gets the whole screen
   const k = Math.min(availW / CW, availH / H); // fills the window, pixels stay square
   cv.style.width = Math.round(CW * k) + 'px'; cv.style.height = Math.round(H * k) + 'px';
 }
@@ -1066,6 +1072,7 @@ addEventListener('keydown', e => {
 });
 const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 }, BTN_F = { x: 138, y: 225, w: 52, h: 12 };
 cv.addEventListener('pointerdown', e => {
+  if (touchMode) return; // phones use the touch controls below
   initAudio(); cv.focus();
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
@@ -1193,8 +1200,10 @@ function drawPanel() {
   if (curInfoMsg) textS(curInfoMsg, 210, 214, '#ff8080', 1);
   else if (state.p.strain >= 75) textS('WEAK! -20% DMG', 210, 214, '#ff5050', 1);
   else if (state.p.strain >= 50) textS('KI COST +25%', 210, 214, '#ffa020', 1);
+  else if (touchMode) textS('TAP AGAIN: USE', 210, 214, '#8888b0', 1);
 }
 function drawToggles() {
+  if (touchMode) return; // on phones Sound and Voice live in Options
   const list = [[BTN_M, '[M] SND', !muted], [BTN_T, '[T] VOICE', voiceOn]];
   if (!touchMode) list.unshift([BTN_F, '[F] FULL', !!document.fullscreenElement]);
   list.forEach(([b, label, on]) => {
@@ -1257,7 +1266,7 @@ function drawOver() {
   textS(l2, 12, 170 + lines.length * 16 + 4, '#c8c8e8', 1);
   if (justSaved) textS('PROGRESS SAVED', 12, 219, '#80e0a0', 1);
   if (capMsg) textS(capMsg, 130, 219, '#ffd040', 1);
-  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((foe.id !== 'roku' ? 'Z: CONTINUE   X: MENU' : saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
+  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((touchMode ? 'TAP TO CONTINUE' : foe.id !== 'roku' ? 'Z: CONTINUE   X: MENU' : saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
 }
 
 // ---------- main loop ----------
@@ -1296,12 +1305,14 @@ function drawSides() {
   ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-OFFX, 160, OFFX, 2); ctx.fillRect(W, 160, OFFX + 1, 2); ctx.fillRect(-OFFX, 238, OFFX, 2); ctx.fillRect(W, 238, OFFX + 1, 2);
 }
 function render() {
+  if (touchHintEl) touchHintEl.style.display = (touchMode && mode === 'village') ? 'flex' : 'none';
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
-  if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); ctx.restore(); return; }
+  if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
   if (mode === 'village') { drawVillage(); ctx.save(); ctx.translate(CW - W, 0); drawToggles(); ctx.restore(); return; } // buttons sit at the right end of the wide box
   ctx.save(); ctx.translate(OFFX, 0);
   if (OFFX > 0) drawSides();
   renderInner();
+  drawBackBtn();
   ctx.restore();
 }
 function renderInner() {
@@ -1438,7 +1449,7 @@ function drawTitleScreen() {
     if (sel) textS('>', 10, y, '#ffe060', 2);
     textS(it, 28, y, ok ? (sel ? '#ffe060' : '#ffffff') : '#666680', 2);
   });
-  textS(touchMode ? 'D-PAD + OK' : 'UP/DOWN + Z', 150, 172, '#8888b0', 1);
+  textS(touchMode ? 'TAP TO SELECT' : 'UP/DOWN + Z', 150, 172, '#8888b0', 1);
   textS('FAN GAME. NOT OFFICIAL.', 150, 184, '#6a6a90', 1);
 }
 function drawSlots() {
@@ -1489,7 +1500,7 @@ function drawCreator() {
   const set = makeHeroSet(cr), fr = Math.floor(time * 2.2) % 2 ? 'idle1' : 'idle0', sc = 2, bob = Math.round(Math.sin(time * 3));
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(cxm - 16), py + ph - 8, 32, 4);
   ctx.drawImage(set.img[fr], Math.round(cxm - set.w * sc / 2), py + ph - 6 - set.h * sc + sc + bob, set.w * sc, set.h * sc);
-  textS('ARROWS   Z: OK   ESC: BACK', 8, 226, '#8888b0', 1);
+  textS(touchMode ? 'TAP A ROW. LEFT PART = BACK ONE.' : 'ARROWS   Z: OK   ESC: BACK', 8, 226, '#8888b0', 1);
 }
 function drawOptions() {
   flatBg(); center('OPTIONS', 10, '#ffd040', 2);
@@ -1504,11 +1515,11 @@ function drawOptions() {
   const desc = { training: 'ROKU LEARNS LITTLE. GOOD TO PRACTISE.', normal: 'ROKU LEARNS YOUR HABITS.', master: 'ROKU READS YOU AND HITS HARDER.' }[difficulty];
   center(desc, 146, '#c8c8e8', 1);
   center('CONTROLS', 168, '#ffd040', 1);
-  ['ARROWS/WASD: MOVE   Z/SPACE: SELECT', 'X/ESC: BACK   M: SOUND   T: VOICE'].forEach((l, i) => center(l, 182 + i * 12, '#c8c8e8', 1));
+  (touchMode ? ['DRAG TO MOVE. TAP TO SELECT.', 'TAP < BACK TO LEAVE.'] : ['ARROWS/WASD: MOVE   Z/SPACE: SELECT', 'X/ESC: BACK   M: SOUND   T: VOICE']).forEach((l, i) => center(l, 182 + i * 12, '#c8c8e8', 1));
 }
 function drawCredits() {
   flatBg(); center('CREDITS', 10, '#ffd040', 2);
-  ['YADRA: THE TWO SAIYANS', '', 'A FAN GAME MADE BY GYTIS', 'WITH HELP FROM CLAUDE CODE', '', 'INSPIRED BY DRAGON BALL', 'BY AKIRA TORIYAMA.', 'NOT AN OFFICIAL GAME.', 'NOT MADE TO EARN MONEY.', '', 'PRESS Z TO GO BACK'].forEach((l, i) => center(l, 40 + i * 16, i === 0 ? '#ffe060' : '#ffffff', 1));
+  ['YADRA: THE TWO SAIYANS', '', 'A FAN GAME MADE BY GYTIS', 'WITH HELP FROM CLAUDE CODE', '', 'INSPIRED BY DRAGON BALL', 'BY AKIRA TORIYAMA.', 'NOT AN OFFICIAL GAME.', 'NOT MADE TO EARN MONEY.', '', (touchMode ? 'TAP TO GO BACK' : 'PRESS Z TO GO BACK')].forEach((l, i) => center(l, 40 + i * 16, i === 0 ? '#ffe060' : '#ffffff', 1));
 }
 
 // ================= training: Body / Ki / Focus, gravity chamber, Body Strain carried into the fight =================
@@ -1525,6 +1536,17 @@ function trainOf() {
 }
 function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
 function statCap() { return Math.min(STAT_MAX, 4 + 2 * milestones()); }
+function statCapOf(stat) { return Math.max(statCap(), (trainOf()[stat] | 0)); }
+function nextMilestone() { // the next real goal, never something already done
+  const q = questOf();
+  if (!(saveData && saveData.wins > 0)) return 'BEAT ROKU IN THE ARENA';
+  if (q.step < 4) return q.step >= 3 ? 'TELL THE BOY ABOUT HIS SISTER' : 'FINISH THE FOREST MISSION';
+  if (q2Of().step < 2) return "FINISH THE COOK'S MISSION";
+  if (bondOf().boy < 5) return 'BECOME BEST FRIENDS WITH THE BOY';
+  if (!(saveData.tech && saveData.tech.indexOf('steady') >= 0)) return 'BEAT THE SPIRIT MASTER IN LUMORA';
+  if (!saveData.rivalDone) return 'BEAT THE RIVAL IN ORAYA CITY';
+  return '';
+}
 const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left today: 3 = morning ... 0 = night
 function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
@@ -1536,7 +1558,7 @@ function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
-  const before = t[stat]; t[stat] = Math.min(Math.max(statCap(), t[stat]), t[stat] + lv.gain); t.fatigue += lv.fat;
+  const before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat;
   const got = t[stat] - before;
   trAfter((got ? stat.toUpperCase() + ' +' + got : stat.toUpperCase() + ' IS FULL') + '.  STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
 }
@@ -1562,7 +1584,7 @@ function trainPress(k) {
   if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
-  if (t[stat] >= statCap()) { sfx('bad'); trMsg = it + ' IS AT ITS CAP (' + statCap() + '). BEAT ROKU OR DO MISSIONS TO RAISE IT.'; return true; }
+  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = nm ? it + ' IS AT ITS CAP (' + statCapOf(stat) + '). NEXT: ' + nm + '.' : it + ' IS MAXED. YOU ARE AT THE TOP.'; return true; }
   const gi = t.grav;
   if (gi >= 1 && gi < (trainHall ? GRAV.length : 4) - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
@@ -1577,7 +1599,7 @@ function drawTrain() {
   const hpN = 170 + C.CFG.train.hpPerBody * t.body, kiN = 100 + C.CFG.train.kiPerKi * t.ki, rdC = Math.round((1 - Math.max(0.4, 1 - C.CFG.train.readCutPerFocus * t.focus)) * 100);
   [['BODY', t.body, '#e0a040', 'HP ' + hpN], ['KI', t.ki, '#4090ff', 'KI ' + kiN], ['FOCUS', t.focus, '#60e0c0', 'READ -' + rdC + '%']].forEach((r, i) => {
     const y = 34 + i * 20;
-    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2], { marks: [statCap()] }); textS('LV ' + r[1] + '/' + statCap(), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
+    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2], { marks: [statCapOf(r[0].toLowerCase())] }); textS('LV ' + r[1] + '/' + statCapOf(r[0].toLowerCase()), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
   });
   const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
   textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
@@ -1596,7 +1618,7 @@ function drawTrain() {
   } else {
     TR_ITEMS.forEach((it, i) => {
       const c = i % 2, r = i >> 1, x = 14 + c * 152, y = 168 + r * 18, sel = i === trIdx;
-      const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= statCap();
+      const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= statCapOf(it.toLowerCase());
       const off = (t.sessions <= 0 && it !== 'FIGHT' && it !== 'GRAVITY') || full;
       if (sel) textS('>', x - 4, y, '#ffe060', 2);
       textS(it === 'GRAVITY' ? 'GRAV ' + lv.g + 'X' : it, x + 10, y, off ? '#666680' : (sel ? '#ffe060' : '#ffffff'), 2);
@@ -1883,7 +1905,7 @@ function drawVillage() {
   textS(CW > 320 ? '[G] MAP' : 'MAP', CW > 320 ? CW - 48 : CW - 22, 3, '#80e0ff', 1); if (CW > 320) textS(placeName(), CW - 48 - textW(placeName()) - 10, 3, '#c8f0ff', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
-  const key = touchMode ? 'OK' : 'Z';
+  const key = touchMode ? 'TAP' : 'Z';
   if (vMenu) {
     { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
   } else if (vTalk) {
@@ -1942,7 +1964,7 @@ function forestPeople() { // bandits guard the girl once the hidden trail has op
     { name: 'BANDIT', x: 552, y: 216, body: '#6a3080', hair: '#202020', face: -1, step: 0, lines: [] },
     { name: 'SISTER', x: 570, y: 184, body: '#e0a0a0', hair: '#804020', face: -1, step: 0, line: 0, lines: ['SISTER: PLEASE HELP ME! THEY WILL NOT LET ME GO!'] }];
 }
-function enterForest() { area = 'forest'; vx = 24; vy = 140; vFade = 1; vWalk = 0; vBanditT = 0; vSenseT = 0; vMsg = 'THE FOREST. PRESS ' + (touchMode ? 'OK' : 'Z') + ' TO USE SPIRIT SENSE.'; sfx('ok'); }
+function enterForest() { area = 'forest'; vx = 24; vy = 140; vFade = 1; vWalk = 0; vBanditT = 0; vSenseT = 0; vMsg = 'THE FOREST. PRESS ' + (touchMode ? 'TAP' : 'Z') + ' TO USE SPIRIT SENSE.'; sfx('ok'); }
 function exitForest() { area = 'village'; vx = 612; vy = 112; vFade = 1; vWalk = 0; vMsg = 'BACK IN THE VILLAGE.'; sfx('move'); }
 function toForest(x, y, line) {
   stopSpeech(); trainOf(); mode = 'village'; area = 'forest'; vx = x; vy = y; vTalk = ''; vMenu = null; vFade = 1; vFlash = 0; vBanditT = 6; vSenseT = 0;
@@ -2072,7 +2094,7 @@ function drawBobber() {
   if (f.phase === 'bite') { ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(bx, Math.round(by) + 2, 6 + (f.t * 30) % 10, 0, 6.28); ctx.stroke(); textS('!', bx - 2, Math.round(by) - 26, '#ffe060', 2); }
 }
 function drawFishUi() {
-  const f = vFish, t = trainOf(); if (!f) return; const key = touchMode ? 'OK' : 'Z';
+  const f = vFish, t = trainOf(); if (!f) return; const key = touchMode ? 'TAP' : 'Z';
   if (f.phase === 'reel') {
     const X = Math.round((CW - 220) / 2), Y = 40, Wd = 220, F = FISH[f.kind];
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(X - 8, Y - 14, Wd + 16, 62); ctx.fillStyle = '#1a2a4a'; ctx.fillRect(X, Y, Wd, 14);
@@ -2118,7 +2140,7 @@ function friendPick(m) {
     vTalk = 'BOY: A ' + FISH[kind].n + '! THANK YOU! (BOND ' + b.boy + '/5)' + extra; say(vTalk); return;
   }
   if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP AT HOME.'; vMenu = null; return; }
-  const cap = statCap(), names = ['body', 'ki', 'focus'], low = names.filter(k => t[k] < cap).sort((a, c) => t[a] - t[c])[0];
+  const names = ['body', 'ki', 'focus'], low = names.filter(k => t[k] < statCapOf(k)).sort((a, c) => t[a] - t[c])[0];
   t.sessions--; t.fatigue = Math.min(99, t.fatigue + 6); if (low) t[low]++;
   const extra = bondUp(1); trSave(); vMenu = null; sfx('ok'); vFlash = .3;
   vTalk = 'YOU SPARRED WITH THE BOY. ' + (low ? low.toUpperCase() + ' +1. ' : 'ALL STATS AT THE CAP. ') + 'STRAIN +6. (BOND ' + b.boy + '/5)' + extra; say(vTalk);
@@ -2229,7 +2251,7 @@ function restNow() {
 function meditateNow() {
   const t = trainOf();
   if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return; }
-  t.sessions--; t.fatigue = Math.max(0, t.fatigue - 15); const cap = statCap(), gain = t.focus < cap;
+  t.sessions--; t.fatigue = Math.max(0, t.fatigue - 15); const gain = t.focus < statCapOf('focus');
   if (gain) t.focus++; trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU MEDITATED. ' + (gain ? 'FOCUS +1. ' : 'FOCUS IS AT ITS CAP. ') + 'STRAIN -15.'; say(vMsg);
 }
 function enterHut(b) {
@@ -2330,7 +2352,7 @@ function drawMap() {
   });
   const t = trainOf(), sel = MAP_NODES[mapSel];
   textS(sel ? sel.n : '', 10, 206, '#ffe060', 1);
-  textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : (touchMode ? 'OK' : 'Z') + ': TRAVEL (1 TIME SLOT)  ' + (t.sessions ? '' : 'NIGHT!')), 10, 217, mapMsg ? '#ff8080' : '#c8c8e8', 1);
+  textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : (touchMode ? 'TAP' : 'Z') + ': TRAVEL (1 TIME SLOT)  ' + (t.sessions ? '' : 'NIGHT!')), 10, 217, mapMsg ? '#ff8080' : '#c8c8e8', 1);
   textS('ARROWS  X: BACK', 10, 228, '#8888b0', 1);
 }
 // ---------- drawing a town or a road ----------
@@ -2445,26 +2467,71 @@ const held = { up: false, down: false, left: false, right: false };
 let touchMode = false;
 addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k && held[k] !== undefined) held[k] = false; });
 addEventListener('blur', () => { for (const k in held) held[k] = false; });
+const BACK_MODES = ['slots', 'creator', 'options', 'credits', 'train', 'map', 'over'];
+function drawBackBtn() {
+  if (!touchMode || BACK_MODES.indexOf(mode) < 0) return;
+  const label = mode === 'over' ? '< MENU' : '< BACK';
+  ctx.fillStyle = 'rgba(10,10,40,.88)'; ctx.fillRect(2, 2, 44, 14); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(2, 2, 44, 1); ctx.fillRect(2, 15, 44, 1); ctx.fillRect(2, 2, 1, 14); ctx.fillRect(45, 2, 1, 14);
+  textS(label, 7, 6, '#ffe060', 1);
+}
 (function setupTouch() {
   const isT = params.get('touch') === '1' || (window.matchMedia && matchMedia('(pointer: coarse)').matches);
   if (!isT) return;
   touchMode = true; document.body.classList.add('touch'); fit();
-  const pad = document.getElementById('pad');
-  const DIRS4 = ['up', 'down', 'left', 'right'];
-  let rep = null;
-  pad.querySelectorAll('button').forEach(b => {
-    const k = b.dataset.k;
-    const down = e => {
-      e.preventDefault(); initAudio(); b.classList.add('on');
-      if (held[k] !== undefined) held[k] = true;
-      press(k);
-      if (DIRS4.indexOf(k) >= 0) { clearTimeout(rep); rep = setTimeout(function again() { press(k); rep = setTimeout(again, 120); }, 300); }
-    };
-    const up = e => { e.preventDefault(); b.classList.remove('on'); if (held[k] !== undefined) held[k] = false; clearTimeout(rep); };
-    b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
-    b.addEventListener('contextmenu', e => e.preventDefault());
-  });
   document.addEventListener('contextmenu', e => e.preventDefault());
+  const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
+  let jid = null, ox = 0, oy = 0;
+  const clearHeld = () => { held.left = held.right = held.up = held.down = false; };
+  const canvasXY = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - OFFX, y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
+  const worldMode = () => mode === 'village' && !vTalk && !vMenu;
+  // tap a menu row: first tap selects it, tapping the same row again confirms
+  function tapAt(c) {
+    if (!c.inside) return;
+    const x = c.x, y = c.y, inR = (rx, ry, rw, rh) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
+    if (BACK_MODES.indexOf(mode) >= 0 && inR(0, 0, 48, 18)) { press('back'); return; }
+    if (mode === 'title') { for (let i = 0; i < TITLE_ITEMS.length; i++) if (inR(6, 165 + i * 17, 230, 17)) { titleIdx = i; press('ok'); return; } }
+    else if (mode === 'slots') { for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; } press('ok'); return; } }
+    else if (mode === 'creator') { for (let i = 0; i < 8; i++) if (inR(8, 27 + i * 22, 172, 19)) { crRow = i; if (i >= 1 && i <= 5) press(x < 62 ? 'left' : 'right'); else press('ok'); return; } }
+    else if (mode === 'options') { for (let i = 0; i < 4; i++) if (inR(20, 31 + i * 26, 280, 24)) { optIdx = i; press('ok'); return; } }
+    else if (mode === 'credits') press('ok');
+    else if (mode === 'train') { for (let i = 0; i < TR_ITEMS.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(8 + cc * 152, 166 + rr * 18, 146, 18)) { trIdx = i; press('ok'); return; } } }
+    else if (mode === 'tevent') { for (let i = 0; i < 2; i++) if (inR(6, 186 + i * 17, 300, 17)) { trEvIdx = i; press('ok'); return; } }
+    else if (mode === 'map') {
+      const vis = mapVisited();
+      for (const k of Object.keys(MAP_NODES)) { if (!vis[k]) continue; const n = MAP_NODES[k], w = Math.max(56, n.n.length * 6 + 12); if (inR(n.x + 34 - w / 2, n.y - 10, w, 20)) { if (mapSel === k) press('ok'); else { mapSel = k; sfx('move'); } return; } }
+    }
+    else if (mode === 'menu') {
+      if (state.p.collapsed) { press('ok'); return; }
+      for (let i = 0; i < MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
+    }
+    else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
+    else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
+  }
+  addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && params.get('touch') !== '1') return;
+    e.preventDefault(); initAudio();
+    if (vTalk) { press('ok'); return; }
+    if (worldMode()) {
+      if (jid === null && e.clientX < innerWidth / 2) { // a floating joystick appears under the finger
+        jid = e.pointerId; ox = e.clientX; oy = e.clientY; joy.style.display = 'block'; joy.style.left = ox + 'px'; joy.style.top = oy + 'px'; knob.style.transform = 'translate(0px,0px)';
+        try { document.body.setPointerCapture(e.pointerId); } catch (_) {} return;
+      }
+      const c = canvasXY(e);
+      if (c.inside && c.y < 14 && c.x > CW - 70) press('map'); else press('ok');
+      return;
+    }
+    tapAt(canvasXY(e));
+  }, { passive: false });
+  addEventListener('pointermove', e => {
+    if (e.pointerId !== jid) return;
+    let dx = e.clientX - ox, dy = e.clientY - oy; const d = Math.hypot(dx, dy), R = 50; if (d > R) { dx *= R / d; dy *= R / d; }
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    const dz = 14, ax = Math.abs(dx), ay = Math.abs(dy);
+    held.right = dx > dz && ax > ay * .45; held.left = dx < -dz && ax > ay * .45; held.down = dy > dz && ay > ax * .45; held.up = dy < -dz && ay > ax * .45;
+  });
+  const end = e => { if (e.pointerId !== jid) return; jid = null; joy.style.display = 'none'; clearHeld(); };
+  addEventListener('pointerup', end); addEventListener('pointercancel', end);
+  addEventListener('blur', () => { jid = null; joy.style.display = 'none'; clearHeld(); });
 })();
 function refreshTouchToggles() {
   const s = document.getElementById('btnSnd'), v = document.getElementById('btnVoice');
