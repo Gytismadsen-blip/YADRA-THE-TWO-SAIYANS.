@@ -942,7 +942,7 @@ function recordFight(win) { // progress is saved after every fight
   saveData.fights = (saveData.fights || 0) + 1;
   if (win) { saveData.wins = (saveData.wins || 0) + 1; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
-  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15); t.meal = 0; t.mom = false;
+  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15); t.meal = 0; t.mom = false; t.day++;
   saveData.savedAt = Date.now();
   return writeSlot(curSlot, saveData);
 }
@@ -1107,15 +1107,17 @@ function trainOf() {
   const t = saveData.train || (saveData.train = {});
   const n = (v, lo, hi, d) => Math.max(lo, Math.min(hi, v === undefined ? d : (v | 0)));
   t.body = n(t.body, 0, STAT_MAX, 0); t.ki = n(t.ki, 0, STAT_MAX, 0); t.focus = n(t.focus, 0, STAT_MAX, 0);
-  t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
+  t.day = n(t.day, 1, 999, 1); t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
   return t;
 }
+const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left today: 3 = morning ... 0 = night
+function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
 function toTrain(line) {
   stopSpeech(); trainOf(); mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
   P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
 }
-function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' NO TURNS LEFT. GO FIGHT.'; }
+function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' IT IS NIGHT. GO FIGHT.'; }
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
@@ -1142,7 +1144,7 @@ function trainPress(k) {
   const it = TR_ITEMS[trIdx];
   if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
   if (it === 'GRAVITY') { t.grav = (t.grav + 1) % GRAV.length; sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
-  if (t.sessions <= 0) { sfx('bad'); trMsg = 'NO TURNS LEFT. GO FIGHT.'; return true; }
+  if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. NO TIME LEFT. GO FIGHT.'; return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
   if (t[stat] >= STAT_MAX) { sfx('bad'); trMsg = it + ' IS ALREADY FULL.'; return true; }
@@ -1165,7 +1167,7 @@ function drawTrain() {
   const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
   textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
   textS('YOU START THE FIGHT AT STRAIN ' + Math.min(80, t.fatigue), 116, 108, t.fatigue >= 50 ? '#ffa020' : '#8888b0', 1);
-  textS('TURNS LEFT: ' + t.sessions, 116, 120, t.sessions ? '#ffe060' : '#ff8080', 1);
+  textS('DAY ' + t.day + '  ' + timeName(t), 116, 120, t.sessions ? '#ffe060' : '#ff8080', 1);
   wrap(trMsg, 34).slice(0, 2).forEach((l, i) => textS(l, 8, 141 + i * 10, '#c8f0ff', 1));
   panelBox();
   if (mode === 'tevent') {
@@ -1277,7 +1279,7 @@ function villageUpdate(dt) {
 }
 function vEat(m) {
   const t = trainOf();
-  if (t.sessions < m.turns) { sfx('bad'); vMsg = 'NOT ENOUGH TURNS.'; return; }
+  if (t.sessions < m.turns) { sfx('bad'); vMsg = 'NOT ENOUGH TIME LEFT TODAY.'; return; }
   if (m.hp && t.meal) { sfx('bad'); vMsg = 'YOU ARE FULL ALREADY.'; return; }
   if (!m.hp && t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; return; }
   t.sessions -= m.turns; t.fatigue = Math.max(0, Math.min(99, t.fatigue + m.str)); if (m.hp) t.meal = m.hp;
@@ -1300,7 +1302,7 @@ function villagePress(k) {
   else if (tg === 'ramen') enterRoom('ramen');
   else if (tg === 'home') enterRoom('home');
   else if (tg === 'rest') {
-    if (t.sessions <= 0) { sfx('bad'); vMsg = 'NO TURNS LEFT. GO FIGHT.'; }
+    if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. NO TIME LEFT. GO FIGHT.'; }
     else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
     else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
   } else if (tg === 'elder') {
@@ -1408,23 +1410,24 @@ function drawVillage() {
   if (area === 'village') drawWorld(); else drawRoom();
   if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const q = tg === 'elder' ? { x: V_ELDER.x, y: V_ELDER.y - 40 } : (p => ({ x: p.x, y: p.y - 38 }))(curPeople()[vNearPerson()]); textS('!', Math.round(q.x) - 2, Math.round(q.y), '#ffe060', 2); }
   ctx.restore();
+  { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, W, 196); } }
   // top bar
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 12);
-  textS(hero.name, 6, 3, '#80c8ff', 1); textS('TURNS ' + t.sessions, 80, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
-  const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 150, 3, fc, 1);
-  if (t.meal) textS('FED +' + t.meal, 236, 3, '#ffb060', 1);
+  textS(hero.name, 6, 3, '#80c8ff', 1); textS('DAY ' + t.day + ' ' + timeName(t), 66, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
+  const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 172, 3, fc, 1);
+  if (t.meal) textS('FED +' + t.meal, 252, 3, '#ffb060', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, W, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, W, 2); ctx.fillRect(0, 238, W, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(318, 196, 2, 44);
   const key = touchMode ? 'OK' : 'Z';
   if (vMenu) {
-    MEALS.forEach((m, i) => { const y = 201 + i * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' 2T' : '') + '  ' + m.short, 16, y, sel ? '#ffe060' : '#ffffff', 1); });
+    MEALS.forEach((m, i) => { const y = 201 + i * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16, y, sel ? '#ffe060' : '#ffffff', 1); });
   } else if (vTalk) {
     wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', 'SOUP, BIG MEAL OR FEAST.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, '']) : ['', ''];
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], person: pinfo }[tg];
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. COSTS TIME.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
