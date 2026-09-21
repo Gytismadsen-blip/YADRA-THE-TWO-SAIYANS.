@@ -2091,7 +2091,7 @@ function drawVillage() {
     const cn = vChoice.opts.length, big = cn <= 2;
     vChoice.opts.forEach((o, i) => { const y = big ? 200 + i * 19 : 201 + i * 13, sel = i === vChoice.idx, dim = vChoice.dim && vChoice.dim[i]; if (sel) textS('>', 6, y, '#ffe060', big ? 2 : 1); textS(o, big ? 24 : 16, y, sel ? '#ffe060' : dim ? '#8888a0' : '#ffffff', big ? 2 : 1); });
   } else if (vMenu) {
-    { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
+    { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (!touchMode) textS('X: BACK', CW - 52, 201, '#8888b0', 1); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
   } else if (vTalk) {
     wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
@@ -2303,7 +2303,8 @@ function drawFishUi() {
   textS(f.phase === 'wait' ? (touchMode ? 'TAP WHEN IT BITES. NOT BEFORE.' : key + ' TOO EARLY SCARES IT. X: STOP') : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
 }
 function fishItems() { return trainOf().inv.map((k, i) => ({ fish: k, idx: i, n: FISH[k].n, short: '+' + FISH[k].hp + ' HP  STR ' + (FISH[k].str > 0 ? '+' : '') + FISH[k].str })); }
-function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); if (vMenu && vMenu.kind === 'shop') return shopItems(); if (vMenu && vMenu.kind === 'cook') return cookItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
+function menuItems() { const r = menuItemsBase(); r.push({ act: 'close', n: 'BACK', short: 'LEAVE THE MENU' }); return r; }
+function menuItemsBase() { if (vMenu && vMenu.kind === 'friend') return friendItems(); if (vMenu && vMenu.kind === 'shop') return shopItems(); if (vMenu && vMenu.kind === 'cook') return cookItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
 // ================= mission 2 (the cook's golden ramen) + the boy as your first friend =================
 const GOLDEN = { n: 'GOLDEN RAMEN', turns: 1, hp: 20, str: -25, d: '+20 HP FIGHT, STRAIN -25', short: '+20 HP  STR -25' };
 const BOY_TALK = ['BOY: I AM STILL SCARED OF THE FOREST. BUT YOU WERE BRAVE.', 'BOY: MY SISTER SAYS I TALK TOO MUCH.', 'BOY: I WANT TO LEARN A KI BLAST. CAN YOU SHOW ME?', 'BOY: WHEN I FEEL SCARED, I THINK OF YOU.', 'BOY: ONE DAY WE WILL TRAIN TOGETHER AGAINST ROKU!', 'BOY: YOU ARE MY BEST FRIEND!'];
@@ -2390,7 +2391,7 @@ function sisterTalk(p) {
   if (questOf().step < 4) { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; say(vTalk); return; }
   sfx('ok'); vMenu = { idx: 0, kind: 'friend', who: 'sister' };
 }
-function vPick(m) { if (vMenu && vMenu.kind === 'friend') friendPick(m); else if (vMenu && vMenu.kind === 'shop') shopPick(m); else if (vMenu && vMenu.kind === 'cook') cookPick(m); else vEat(m); }
+function vPick(m) { if (m.act === 'close') { sfx('move'); vMenu = null; return; } if (vMenu && vMenu.kind === 'friend') friendPick(m); else if (vMenu && vMenu.kind === 'shop') shopPick(m); else if (vMenu && vMenu.kind === 'cook') cookPick(m); else vEat(m); }
 // ================= the big world: six places, six roads, a world map =================
 // Map (from the plan): Sorya Village - Tavora - Keshin - Oraya City, and Sorya - Mirakai - Lumora - Oraya City.
 const GATE_INTO = { keshin: 2, lumora: 2, oraya: 3 }; // milestones needed to walk into a place
