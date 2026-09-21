@@ -909,7 +909,7 @@ function startFightIntro(line) { // Roku slides in like a boss reveal
 }
 function finishTurn() {
   P.alpha = 1; P.ox = 0; R.ox = 0; P.pose = R.pose = 'idle'; P.lean = R.lean = 0; P.squash = R.squash = 1; cineT = 0;
-  if (state.over) { over = state.over; overT = 0; mode = 'over'; justSaved = recordFight(state.over === 'win'); sfx(over === 'win' ? 'win' : 'lose'); setMsg(''); say(overLine()); }
+  if (state.over) { over = state.over; overT = 0; mode = 'over'; justSaved = recordFight(state.over === 'win'); sfx(over === 'win' ? 'win' : 'lose'); setMsg(''); overTxt = overLine(); say(overTxt); }
   else { mode = 'menu'; setMsg(state.p.collapsed ? "YOU CAN'T MOVE! PRESS Z." : ''); curInfoMsg = ''; }
 }
 
@@ -920,7 +920,7 @@ addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
   const k = KEYMAP[e.key]; if (!k) return;
-  e.preventDefault(); if (e.repeat && k === 'ok') return;
+  e.preventDefault(); if (held[k] !== undefined) held[k] = true; if (e.repeat && k === 'ok') return;
   press(k);
 });
 const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 };
@@ -935,11 +935,11 @@ function press(k) {
   if (k === 'voice') { setVoice(!voiceOn); return; }
   if (menuPress(k)) return;
   if (mode === 'intro') {
-    if (k === 'ok' || k === 'back') { sfx('ok'); introPage++; if (introPage >= INTRO.length) { stopSpeech(); setMsg(''); startFightIntro(); } else { setMsg(INTRO[introPage]); say(INTRO[introPage]); } }
+    if (k === 'ok' || k === 'back') { sfx('ok'); introPage++; if (introPage >= INTRO.length) { stopSpeech(); setMsg(''); toVillage('ROKU: TRAIN FIRST. I WAIT IN THE ARENA.'); } else { setMsg(INTRO[introPage]); say(INTRO[introPage]); } }
     return;
   }
   if (mode === 'anim') { if (k === 'ok' || k === 'back') { fast = true; stopSpeech(); } return; }
-  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (saveData) toTrain('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
+  if (mode === 'over') { if (overT > 1) { if (k === 'ok') { sfx('ok'); if (saveData) toVillage('ROKU: TRAIN. THEN COME BACK.'); else newGame({}); } else if (k === 'back') { sfx('ok'); toTitle(); } } return; }
   if (mode === 'menu') {
     if (state.p.collapsed) { if (k === 'ok') { sfx('ok'); doTurn('collapse'); } return; }
     let c = menuIdx % 2, r = menuIdx >> 1;
@@ -1053,7 +1053,44 @@ function drawToggles() {
     text(label, b.x + 4, b.y + 3, on ? '#80ff80' : '#8080a0', 1);
   });
 }
-function overLine() { return over === 'win' ? 'ROKU: ...NOT BAD. YOU LEARNED CONTROL.' : 'ROKU: TOO LOUD. LEARN CONTROL FIRST.'; }
+let overTxt = '';
+// Roku comments on HOW the fight went (HP left, collapses, length, strain, favourite move). Max 2 lines on screen (~44 chars).
+function overLine() {
+  const p = state.p, hp = Math.round(p.hp), frac = p.hp / C.CFG.player.hp, rfrac = state.r.hp / C.CFG.roku.hp, turns = state.t;
+  const cnt = {}; state.hist.forEach(m => { if (m !== 'collapse') cnt[m] = (cnt[m] || 0) + 1; });
+  const collapses = state.hist.filter(m => m === 'collapse').length;
+  let top = null, n = 0; for (const m in cnt) if (cnt[m] > n) { top = m; n = cnt[m]; }
+  const pick = a => a[(Math.random() * a.length) | 0];
+  if (over === 'win') {
+    if (hp <= 25) return 'ROKU: HA! ONLY ' + hp + ' HP LEFT. TOO CLOSE.';
+    // an easy win after real training: Roku notices how strong you have become
+    const tr = (saveData && saveData.train) || {}, pts = (tr.body | 0) + (tr.ki | 0) + (tr.focus | 0);
+    if (pts >= 6 && frac >= .6 && p.strain < 75 && collapses === 0) {
+      const best = Math.max(tr.body | 0, tr.ki | 0, tr.focus | 0);
+      if ((tr.body | 0) === best && best >= 4) return 'ROKU: YOUR BODY IS STEEL NOW. SO STRONG!';
+      if ((tr.ki | 0) === best && best >= 4) return 'ROKU: YOUR KI IS HUGE NOW. SO STRONG!';
+      if ((tr.focus | 0) === best && best >= 4) return 'ROKU: YOU SEE EVERYTHING NOW. SO STRONG!';
+      return 'ROKU: WOW, ' + hero.name + '! YOU GOT SO STRONG!';
+    }
+    if (collapses >= 1) return pick(['ROKU: YOU COLLAPSED AND STILL WON.', 'ROKU: STUBBORN. YOU FELL AND GOT UP.']);
+    if (p.strain >= 75) return 'ROKU: YOU WON, BUT YOUR BODY IS BROKEN.';
+    if (frac < .35) return 'ROKU: BARELY STANDING. BUT YOU WON.';
+    if (hp >= C.CFG.player.hp) return 'ROKU: FLAWLESS. I NEVER TOUCHED YOU.';
+    if (frac > .8) return 'ROKU: CLEAN. YOU TOOK ALMOST NOTHING.';
+    if (turns <= 8) return 'ROKU: FAST. I NEVER READ YOU IN TIME.';
+    if (turns >= 20) return 'ROKU: LONG FIGHT. YOU OUTLASTED ME.';
+    if (top === 'sense' && n >= 4) return 'ROKU: YOU READ ME LIKE A BOOK.';
+    if (top === 'guard' && n >= 4) return 'ROKU: PATIENT. YOU GUARDED AND WAITED.';
+    if (top === 'lance' && n >= 3) return 'ROKU: SPIRIT LANCE AGAIN? IT WORKED.';
+    return pick(['ROKU: ...NOT BAD. YOU LEARNED CONTROL.', 'ROKU: GOOD. YOUR HEAD WAS CLEAR.']);
+  }
+  if (rfrac <= .2) return 'ROKU: SO CLOSE. I FELT THAT ONE.';
+  if (collapses >= 2) return 'ROKU: YOU KEPT COLLAPSING. SLOW DOWN.';
+  if (p.strain >= 50) return 'ROKU: TOO MUCH STRAIN. YOUR BODY QUIT.';
+  if (turns <= 6) return 'ROKU: THAT WAS FAST. SLOW DOWN. THINK.';
+  if (top && n >= 6) return 'ROKU: I SAW EVERY ' + NAME[top] + ' COMING.';
+  return pick(['ROKU: TOO LOUD. LEARN CONTROL FIRST.', 'ROKU: YOU RUSHED. LEARN TO WAIT.']);
+}
 function drawOver() {
   const k = clamp01(overT / .6);
   ctx.fillStyle = 'rgba(0,0,0,' + (0.45 * k) + ')'; ctx.fillRect(0, 0, W, 160);
@@ -1062,13 +1099,13 @@ function drawOver() {
   textS(title, Math.round(W / 2 - textW(title, 4) / 2), 38, win ? '#ffd040' : '#ff6060', 4);
   const cnt = {}; state.hist.forEach(m => { if (m !== 'collapse') cnt[m] = (cnt[m] || 0) + 1; });
   let top = null, n = 0; for (const m in cnt) if (cnt[m] > n) { top = m; n = cnt[m]; }
-  const l1 = overLine();
+  const l1 = overTxt || overLine();
   const l2 = 'TURNS: ' + state.t + '   MOST USED: ' + (top ? NAME[top] + ' x' + n : '-');
   const lines = wrap(l1, 24);
   lines.forEach((l, i) => textS(l, 12, 170 + i * 16, '#ffffff', 2));
   textS(l2, 12, 170 + lines.length * 16 + 4, '#c8c8e8', 1);
   if (justSaved) textS('PROGRESS SAVED', 12, 219, '#80e0a0', 1);
-  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((saveData ? 'Z: TRAIN   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
+  if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) textS((saveData ? 'Z: VILLAGE   X: MENU' : 'Z: FIGHT AGAIN   X: MENU'), 12, 229, '#ffe060', 1);
 }
 
 // ---------- main loop ----------
@@ -1085,6 +1122,7 @@ function update(dt) {
   parts.forEach(p => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 140 * dt; }); for (let i = parts.length - 1; i >= 0; i--) if (parts[i].t > parts[i].life) parts.splice(i, 1);
   pops.forEach(p => { p.t += dt; }); for (let i = pops.length - 1; i >= 0; i--) if (pops[i].t > 1.1) pops.splice(i, 1);
   if (mode === 'over') overT += dt;
+  if (mode === 'village') villageUpdate(dt);
   if (mode === 'anim') {
     if (hitstop > 0) { hitstop -= dt; return; }
     const s = script[si];
@@ -1339,7 +1377,7 @@ function trainPress(k) {
   }
   let c = trIdx % 2, r = trIdx >> 1;
   if (k === 'left' && c > 0) c--; else if (k === 'right' && c < 1) c++; else if (k === 'up' && r > 0) r--; else if (k === 'down' && r < 2) r++;
-  else if (k === 'back') { sfx('move'); toTitle(); return true; }
+  else if (k === 'back') { sfx('move'); toVillage(); return true; }
   if (k === 'left' || k === 'right' || k === 'up' || k === 'down') { const n = r * 2 + c; if (n !== trIdx) sfx('move'); trIdx = n; return true; }
   if (k !== 'ok') return true;
   const it = TR_ITEMS[trIdx];
@@ -1390,9 +1428,105 @@ function drawTrain() {
   }
   if (trFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + trFlash + ')'; ctx.fillRect(0, 26, W, 130); }
 }
+
+// ================= the village: walk around and pick a building =================
+const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 }, V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 };
+const V_ELDER = { x: 262, y: 150 };
+const V_TIPS = ['ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
+let vx = 160, vy = 165, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0;
+function toVillage(line) {
+  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vx = 160; vy = 165; vFace = 1; vFlash = 0;
+  P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
+}
+function vTarget() { // what can I use right now?
+  const near = (b) => Math.abs(vx - b.dx) <= 16 && vy >= b.y1 - 2 && vy <= b.y1 + 18;
+  if (vy <= 116 && Math.abs(vx - V_TRAIN.dx) <= 22) return 'train';
+  if (vy <= 116 && Math.abs(vx - V_ARENA.dx) <= 22) return 'arena';
+  if (Math.abs(vx - V_REST.dx) <= 22 && vy >= V_REST.y1 && vy <= V_REST.y1 + 18) return 'rest';
+  if (Math.hypot(vx - V_ELDER.x, vy - V_ELDER.y) < 28) return 'elder';
+  return null;
+}
+function villageUpdate(dt) {
+  if (vFlash > 0) vFlash -= dt;
+  if (vTalk) return;
+  const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
+  if (dx || dy) {
+    const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
+    let nx = Math.max(10, Math.min(310, vx + dx * sp)), ny = Math.max(98, Math.min(192, vy + dy * sp));
+    const solid = (x, y) => x > V_REST.x0 - 4 && x < V_REST.x1 + 4 && y > V_REST.y0 + 14 && y < V_REST.y1;
+    if (Math.hypot(nx - V_ELDER.x, vy - V_ELDER.y) < 10) nx = vx; if (Math.hypot(vx - V_ELDER.x, ny - V_ELDER.y) < 10) ny = vy;
+    if (!solid(nx, vy)) vx = nx; if (!solid(vx, ny)) vy = ny;
+  } else vWalk = 0;
+}
+function villagePress(k) {
+  if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); } return true; }
+  if (k === 'back') { sfx('move'); toTitle(); return true; }
+  if (k !== 'ok') return true;
+  const t = trainOf(), tg = vTarget();
+  if (tg === 'train') { sfx('ok'); toTrain('ROKU: PICK YOUR TRAINING.'); }
+  else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
+  else if (tg === 'rest') {
+    if (t.sessions <= 0) { sfx('bad'); vMsg = 'NO TURNS LEFT. GO FIGHT.'; }
+    else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
+    else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
+  } else if (tg === 'elder') {
+    sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
+  }
+  return true;
+}
+function vBuilding(b, roof, wall, label) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(b.x0 + 3, b.y1, b.x1 - b.x0, 4);
+  ctx.fillStyle = wall; ctx.fillRect(b.x0 + 4, b.y0 + 14, b.x1 - b.x0 - 8, b.y1 - b.y0 - 14);
+  ctx.fillStyle = shade(wall, .8); ctx.fillRect(b.x0 + 4, b.y1 - 4, b.x1 - b.x0 - 8, 4);
+  ctx.fillStyle = shade(roof, .7); ctx.fillRect(b.x0, b.y0 + 12, b.x1 - b.x0, 4);
+  ctx.fillStyle = roof; ctx.fillRect(b.x0, b.y0 + 2, b.x1 - b.x0, 12); ctx.fillRect(b.x0 + 6, b.y0 - 4, b.x1 - b.x0 - 12, 8);
+  ctx.fillStyle = shade(roof, 1.25); ctx.fillRect(b.x0 + 6, b.y0 - 4, b.x1 - b.x0 - 12, 2);
+  ctx.fillStyle = '#2a1a10'; ctx.fillRect(b.dx - 7, b.y1 - 18, 14, 18); ctx.fillStyle = '#f0c040'; ctx.fillRect(b.dx + 3, b.y1 - 9, 2, 2);
+  ctx.fillStyle = '#1a2a4a'; ctx.fillRect(b.x0 + 10, b.y0 + 22, 10, 10); ctx.fillRect(b.x1 - 20, b.y0 + 22, 10, 10);
+  ctx.fillStyle = '#90c8ff'; ctx.fillRect(b.x0 + 11, b.y0 + 23, 8, 8); ctx.fillRect(b.x1 - 19, b.y0 + 23, 8, 8);
+  textS(label, Math.round((b.x0 + b.x1) / 2 - textW(label) / 2), b.y0 + 4, '#ffffff', 1);
+}
+function drawVillage() {
+  const t = trainOf(), tg = vTarget();
+  ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, W, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, W, 12);
+  ctx.fillStyle = '#4a3a70'; [[0, 30, 70], [60, 26, 90], [170, 30, 80], [240, 24, 80]].forEach(m => ctx.fillRect(m[0], m[1], m[2], 10));
+  ctx.fillStyle = '#2f6b3a'; ctx.fillRect(0, 34, W, H - 34);
+  ctx.fillStyle = '#3a7d45'; for (let i = 0; i < 40; i++) ctx.fillRect((i * 53) % 310, 40 + ((i * 37) % 150), 3, 2);
+  ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
+  ctx.fillStyle = '#a08850'; for (let i = 0; i < 24; i++) ctx.fillRect(44 + i * 10, 104 + (i % 3) * 5, 3, 2);
+  vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA'); vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE');
+  // the elder
+  const ey = V_ELDER.y, ex = V_ELDER.x;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3);
+  ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26);
+  if (tg === 'elder' && Math.floor(time * 3) % 2 === 0) textS('!', ex - 2, ey - 40, '#ffe060', 2);
+  // the hero
+  const bob = vWalk ? Math.abs(Math.sin(vWalk)) * 2 : 0, w = P.set.w, h = P.set.h;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(vx - 8), Math.round(vy - 1), 16, 3);
+  ctx.save(); ctx.translate(Math.round(vx), Math.round(vy - bob)); ctx.scale(vFace < 0 ? -1 : 1, 1); ctx.drawImage(P.set.img.idle0, -Math.round(w / 2), -h + 2, w, h); ctx.restore();
+  // top bar
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 12);
+  textS(hero.name, 6, 3, '#80c8ff', 1); textS('TURNS ' + t.sessions, 110, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
+  const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 190, 3, fc, 1);
+  // bottom box
+  ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, W, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, W, 2); ctx.fillRect(0, 238, W, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(318, 196, 2, 44);
+  const key = touchMode ? 'OK' : 'Z';
+  if (vTalk) {
+    wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
+    if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
+  } else if (tg) {
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'] }[tg];
+    textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
+  } else {
+    wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
+    textS('WALK TO A BUILDING.', 8, 226, '#8888b0', 1);
+  }
+  if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, W, 196); }
+}
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
-  else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else return false;
+  else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
   return true;
 }
 function creatorTyping(e) { // the name box takes real keyboard letters
@@ -1407,6 +1541,7 @@ function creatorTyping(e) { // the name box takes real keyboard letters
 }
 function menuPress(k) {
   if (mode === 'train' || mode === 'tevent') return trainPress(k);
+  if (mode === 'village') return villagePress(k);
   if (mode === 'title') {
     if (k === 'up') { titleIdx = (titleIdx + 3) % 4; sfx('move'); }
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
@@ -1428,7 +1563,7 @@ function menuPress(k) {
       if (slotPurpose === 'continue') {
         if (!d) { sfx('bad'); return true; }
         sfx('ok'); hero = cleanHero(d.hero); curSlot = slotIdx; saveData = d; P.set = makeHeroSet(hero); stopSpeech();
-        if (d.fights > 0) toTrain('ROKU: BACK, ' + hero.name + '? TRAIN FIRST.');
+        if (d.fights > 0) toVillage('ROKU: BACK, ' + hero.name + '? TRAIN FIRST.');
         else newGame({ line: 'BACK AGAIN, ' + hero.name + '? GOOD. I WANT A REAL FIGHT.' });
       } else {
         if (d && !slotConfirm) { slotConfirm = true; sfx('warn'); return true; }
