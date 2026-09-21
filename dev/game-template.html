@@ -1131,7 +1131,7 @@ function recordFight(win) { // progress is saved after every fight
   capMsg = '';
   if (foe.id !== 'roku') { saveData.spar = (saveData.spar | 0) + 1; saveData.savedAt = Date.now(); return writeSlot(curSlot, saveData); } // side fights do not start a new day
   saveData.fights = (saveData.fights || 0) + 1;
-  if (win) { saveData.wins = (saveData.wins || 0) + 1; if (saveData.wins === 1) capMsg = 'TRAINING CAP +2!'; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
+  if (win) { saveData.wins = (saveData.wins || 0) + 1; if (saveData.wins === 1) capMsg = 'FIRST WIN OVER ROKU!'; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
   const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.meal = 0; // a fight with Roku takes a slice of the day
  
@@ -1303,7 +1303,7 @@ function trainOf() {
   return t;
 }
 function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
-function statCap() { return Math.min(STAT_MAX, 4 + 2 * milestones()); }
+function statCap() { return STAT_MAX; } // you can always train up to 12: time and strain are the limits, not milestones
 function statCapOf(stat) { return Math.max(statCap(), (trainOf()[stat] | 0)); }
 function derived(t) { // what the training levels give you right now (uses the same numbers as the fight)
   C.setDifficulty('normal'); C.setStats({ body: t.body, ki: t.ki, focus: t.focus, tech: saveData && saveData.tech });
@@ -1358,7 +1358,7 @@ function trainPress(k) {
   if (t.sessions <= 0) { sfx('bad'); trMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
-  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = nm ? it + ' IS AT ITS CAP (' + statCapOf(stat) + '). NEXT: ' + nm + '.' : it + ' IS MAXED. YOU ARE AT THE TOP.'; return true; }
+  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = it + ' IS MAXED (' + statCapOf(stat) + '). TRAIN THE OTHERS.'; return true; }
   const gi = t.grav;
   if (gi >= 1 && gi < (trainHall ? GRAV.length : 4) - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
@@ -1910,7 +1910,7 @@ function boyTalk() {
   const q = questOf(), t = trainOf();
   if (q.step === 0) { sfx('ok'); offerQuest('BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! WILL YOU FIND HER?', () => { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: THANK YOU! I OPENED THE EAST GATE FOR YOU. (QUEST STARTED)'; say(vTalk); }, 'BOY: OH... PLEASE COME BACK SOON. I AM SO WORRIED.'); return; }
   else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
-  else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2, TRAINING CAP +2)'; }
+  else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2)'; }
   else { sfx('ok'); vMenu = { idx: 0, kind: 'friend', who: 'boy' }; return; }
   say(vTalk);
 }
@@ -2048,7 +2048,7 @@ function openFoodMenu() { vMenu = { idx: 0, kind: 'food' }; }
 function cookTalk() {
   const q = q2Of(), t = trainOf(), gi = t.inv.indexOf('gold');
   if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'COOK: I DREAM OF A GOLDEN RAMEN. BRING ME A GOLD FISH FROM THE LAKE! (QUEST STARTED)'; say(vTalk); vAfterTalk = openFoodMenu; }
-  else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU, TRAINING CAP +2)'; say(vTalk); vAfterTalk = openFoodMenu; }
+  else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU)'; say(vTalk); vAfterTalk = openFoodMenu; }
   else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: GOLD FISH FOR COOK'; openFoodMenu(); }
 }
 const FR = { boy: { n: 'BOY', talk: BOY_TALK, key: 'talkDay' }, sister: { n: 'SISTER', key: 'sisterDay', talk: ['SISTER: I AM STILL A LITTLE SCARED OF THE DARK. BUT NOT WITH YOU.', 'SISTER: MY BROTHER TALKS ABOUT YOU ALL DAY.', 'SISTER: TEACH ME HOW TO STAND LIKE A FIGHTER?', 'SISTER: I LIKE FISHING MORE THAN FIGHTING, HONESTLY.', 'SISTER: WE SHOULD FISH TOGETHER! I KNOW A GOOD SPOT.', 'SISTER: YOU ARE LIKE A BIG BROTHER TO ME.'] } };
@@ -2056,7 +2056,7 @@ function friendItems() {
   const t = trainOf(), b = bondOf(), w = vMenu && vMenu.who || 'boy';
   return [{ act: 'talk', n: 'TALK', short: 'BOND ' + b[w] + '/5' }, { act: 'give', n: 'GIVE A FISH', short: 'BAG ' + t.inv.length + '  BOND +1' }, { act: 'spar', n: 'SPAR', short: '1 TIME  +1 STAT' }, { act: 'fishtog', n: 'FISH TOGETHER', short: '1 TIME  +FISH' }];
 }
-function bondUp(n, w) { w = w || 'boy'; const b = bondOf(), before = b[w]; b[w] = Math.min(5, b[w] + n); return before < 5 && b[w] >= 5 ? (w === 'boy' ? ' (BEST FRIENDS! TRAINING CAP +2)' : ' (BEST FRIENDS!)') : ''; }
+function bondUp(n, w) { w = w || 'boy'; const b = bondOf(), before = b[w]; b[w] = Math.min(5, b[w] + n); return before < 5 && b[w] >= 5 ? (w === 'boy' ? ' (BEST FRIENDS!)' : ' (BEST FRIENDS!)') : ''; }
 function friendPick(m) {
   const t = trainOf(), b = bondOf(), w = vMenu.who || 'boy', F = FR[w];
   if (m.act === 'talk') {
@@ -2305,9 +2305,9 @@ function toPlace(a, x, y, line) {
 function duelAfter(win) {
   saveData.tech = saveData.tech || []; let line;
   if (foe.id === 'master') {
-    if (win) { if (saveData.tech.indexOf('steady') < 0) { saveData.tech.push('steady'); saveData.miles = (saveData.miles | 0) + 1; line = 'MASTER: WELL DONE. SPIRIT LANCE STRAINS YOU LESS. (TECHNIQUE, CAP +2)'; } else line = 'MASTER: YOUR MIND IS CLEAR. GOOD.'; }
+    if (win) { if (saveData.tech.indexOf('steady') < 0) { saveData.tech.push('steady'); saveData.miles = (saveData.miles | 0) + 1; line = 'MASTER: WELL DONE. SPIRIT LANCE STRAINS YOU LESS. (TECHNIQUE)'; } else line = 'MASTER: YOUR MIND IS CLEAR. GOOD.'; }
     else line = 'MASTER: CALM YOUR MIND. COME BACK.';
-  } else if (win) { if (!saveData.rivalDone) { saveData.rivalDone = 1; saveData.miles = (saveData.miles | 0) + 1; line = 'RIVAL: HMPH... YOU ARE STRONG. WE MEET AGAIN. (CAP +2)'; } else line = 'RIVAL: YOU WIN AGAIN?! I WILL TRAIN HARDER!'; }
+  } else if (win) { if (!saveData.rivalDone) { saveData.rivalDone = 1; saveData.miles = (saveData.miles | 0) + 1; line = 'RIVAL: HMPH... YOU ARE STRONG. WE MEET AGAIN.'; } else line = 'RIVAL: YOU WIN AGAIN?! I WILL TRAIN HARDER!'; }
   else line = 'RIVAL: HA! COME BACK WHEN YOU ARE STRONGER!';
   trSave(); const r = foeReturn || { area: 'village', x: 140, y: 178 }; toPlace(r.area, r.x, r.y, line);
 }
@@ -2635,7 +2635,7 @@ function drawBag() {
   textS(buffLine() || 'NO BUFF TODAY. COOK A DISH.', 12, 161, buffLine() ? '#80ff80' : '#8888a8', 1);
   head('TECHNIQUES', 174);
   const tech = (saveData.tech || []).map(k => TECHS[k]).filter(Boolean); textS(tech.length ? wrap(tech.join(', '), 50)[0] : 'NONE YET. DO THE TOWN MISSIONS.', 12, 187, tech.length ? '#ffffff' : '#8888a8', 1);
-  textS('BODY ' + t.body + '   KI ' + t.ki + '   FOCUS ' + t.focus + '   CAP ' + statCap(), 12, 203, '#c8f0c8', 1);
+  textS('BODY ' + t.body + '   KI ' + t.ki + '   FOCUS ' + t.focus + '   MAX ' + statCap(), 12, 203, '#c8f0c8', 1);
   textS(touchMode ? 'TAP TOP RIGHT: LOG' : 'X: BACK  L: LOG', 8, 226, '#8888b0', 1);
 }
 // ================= mission log + missions without fighting (you choose HOW to solve them) =================
