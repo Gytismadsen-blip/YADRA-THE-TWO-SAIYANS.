@@ -1629,8 +1629,8 @@ function drawTrain() {
 
 // ================= the world: a big scrolling village, plus rooms you can walk into =================
 const WORLD = { w: 640, h: 400 };
-const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_RAMEN = { x0: 128, y0: 50, x1: 192, y1: 96, dx: 160, enter: 'ramen' }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 };
-const V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 }, V_HOME = { x0: 232, y0: 124, x1: 296, y1: 160, dx: 264, enter: 'home' };
+const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56, style: 'dome' }, V_RAMEN = { x0: 128, y0: 50, x1: 192, y1: 96, dx: 160, enter: 'ramen', style: 'pagoda' }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264, style: 'arena' };
+const V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56, style: 'wide' }, V_HOME = { x0: 232, y0: 124, x1: 296, y1: 160, dx: 264, enter: 'home', style: 'cozy' };
 const V_LAKE = { x0: 380, y0: 232, x1: 540, y1: 320 };
 const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 134 }, { x: 118, y: 150 }, { x: 22, y: 188 }, { x: 302, y: 190 }];
 for (let x = 330; x < 632; x += 26) { V_TREES.push({ x: x + ((x / 26) % 2) * 8, y: 70 + ((x / 26) % 3) * 10 }); } // treeline north of the east path
@@ -1800,17 +1800,122 @@ function villagePress(k) {
   }
   return true;
 }
+// ---------- buildings: every kind has its own silhouette, roof, entrance and things around it ----------
+let lightsOn = false;
+const R_ = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+function bWin(x, y, w, h) { R_(x - 1, y - 1, w + 2, h + 2, '#1a2a4a'); R_(x, y, w, h, lightsOn ? '#ffd870' : '#90c8ff'); R_(x, y, w, 1, lightsOn ? '#fff0b0' : '#c8e8ff'); if (lightsOn) { ctx.fillStyle = 'rgba(255,210,110,.16)'; ctx.fillRect(Math.round(x - 3), Math.round(y - 3), w + 6, h + 8); } }
+function bDoor(b, w, h, c, frame) { R_(b.dx - w / 2 - 1, b.y1 - h - 1, w + 2, h + 1, frame || '#1a1008'); R_(b.dx - w / 2, b.y1 - h, w, h, c || '#2a1a10'); R_(b.dx + w / 2 - 4, b.y1 - h / 2, 2, 2, '#f0c040'); }
+function bShadow(b, ex) { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(b.x0 + 3 - (ex || 0), b.y1, b.x1 - b.x0 + (ex || 0) * 2, 4); }
+function gable(cx, top, base, halfW, c, c2) { for (let y = top; y <= base; y++) { const t = (y - top) / Math.max(1, base - top), hw = Math.round(halfW * (0.12 + 0.88 * t)); R_(cx - hw, y, hw * 2, 1, (y - top) % 4 === 3 ? c2 : c); } }
+function dome(cx, top, base, halfW, c, c2) { for (let y = top; y <= base; y++) { const t = (base - y) / Math.max(1, base - top), hw = Math.round(Math.sqrt(Math.max(0, 1 - t * t)) * halfW); R_(cx - hw, y, hw * 2, 1, (y - top) % 5 === 4 ? c2 : c); } }
+function smoke(x, y) { ctx.fillStyle = 'rgba(235,235,235,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(x + Math.sin(u * 6 + i) * 3), Math.round(y - u * 24), 3, 3); } }
+function styleFor(label, role, extra) {
+  const byRole = { inn: 'wide', food: 'pagoda', gym: 'dome', meditate: 'temple', master: 'temple', rival: 'arena' };
+  if (byRole[role]) return byRole[role];
+  const l = String(label).toUpperCase();
+  if (/BARN/.test(l)) return 'barn'; if (/FORGE/.test(l)) return 'forge'; if (/MARKET/.test(l)) return 'market'; if (/TOWER/.test(l)) return 'tower'; if (/BOAT|NET/.test(l)) return 'boat';
+  if (/LIBRARY|MUSEUM|GUILD|FOREMAN/.test(l)) return 'manor'; return l.length % 2 ? 'gable' : 'cozy';
+}
+const BSTYLE = {
+  dome(b, roof, wall) { // a strong training dome with cracks, a gravity machine and dummies
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 6);
+    R_(X + 2, Y + 24, 60, 22, wall); R_(X + 2, Y + 40, 60, 6, shade(wall, .75)); ctx.fillStyle = '#3a3030'; [[10, 28, 1, 8], [11, 36, 3, 1], [48, 30, 1, 10], [45, 40, 3, 1]].forEach(c => ctx.fillRect(X + c[0], Y + c[1], c[2], c[3]));
+    dome(X + 32, Y + 2, Y + 26, 31, roof, shade(roof, .72)); R_(X + 30, Y - 8, 4, 10, '#c0c0d0'); R_(X + 29, Y - 10, 6, 3, '#ff4040');
+    bWin(X + 10, Y + 30, 7, 7); bWin(X + 47, Y + 30, 7, 7); bDoor(b, 12, 17, '#3a3a48', '#c0c0d0');
+    R_(X + 66, Y + 26, 12, 20, '#606070'); R_(X + 68, Y + 29, 8, 5, Math.floor(time * 3) % 2 ? '#ff5040' : '#802020'); R_(X + 70, Y + 36, 4, 10, '#404050'); R_(X + 62, Y + 40, 6, 2, '#404050');
+    R_(X - 10, Y + 24, 3, 22, '#8a5a30'); R_(X - 14, Y + 28, 11, 9, '#e8d8b0'); R_(X - 11, Y + 31, 5, 3, '#c03030'); return Y + 26;
+  },
+  pagoda(b, roof, wall) { // curved double roof, chimney with smoke, lanterns, a table outside
+    const X = b.x0, Y = b.y1 - 46; bShadow(b);
+    R_(X + 6, Y + 24, 52, 22, wall); R_(X + 6, Y + 42, 52, 4, shade(wall, .8));
+    R_(X - 2, Y + 16, 68, 9, roof); R_(X + 2, Y + 24, 60, 2, shade(roof, .6)); R_(X - 4, Y + 14, 6, 3, roof); R_(X + 62, Y + 14, 6, 3, roof);
+    R_(X + 10, Y + 5, 44, 11, shade(roof, 1.1)); R_(X + 14, Y + 15, 36, 2, shade(roof, .6)); R_(X + 8, Y + 3, 6, 3, roof); R_(X + 50, Y + 3, 6, 3, roof);
+    R_(X + 46, Y - 8, 7, 14, '#6a4a40'); R_(X + 45, Y - 9, 9, 2, '#4a2a20'); smoke(X + 50, Y - 9);
+    bDoor(b, 12, 15, '#3a1a10'); [-1, 1].forEach(sd => { const lx = b.dx + sd * 15; R_(lx - 1, Y + 26, 1, 3, '#c0a060'); R_(lx - 3, Y + 29, 6, 7, '#e83030'); R_(lx - 3, Y + 29, 6, 1, '#ffb0a0'); });
+    ['#e8e8e8', '#c83030', '#e8e8e8'].forEach((c, i) => R_(b.dx - 6 + i * 4, Y + 27, 4, 6, c));
+    R_(X - 14, Y + 38, 12, 3, '#a06a3a'); R_(X - 13, Y + 41, 2, 5, '#7a4a2a'); R_(X - 5, Y + 41, 2, 5, '#7a4a2a'); R_(X - 12, Y + 35, 4, 3, '#f0f0f0'); R_(X - 7, Y + 36, 4, 2, '#e08040'); return Y + 6;
+  },
+  arena(b, roof, wall) { // not a house at all: a stone ring with arches, tribunes and flags
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 6);
+    R_(X - 6, Y + 8, 76, 6, shade(wall, 1.1)); for (let i = 0; i < 20; i++) R_(X - 5 + i * 4, Y + 10, 2, 2, ['#e04040', '#4060e0', '#e0c040', '#40a060'][i % 4]); // crowd
+    R_(X - 6, Y + 14, 76, 32, wall); R_(X - 6, Y + 14, 76, 3, shade(wall, 1.2)); for (let i = 0; i < 9; i++) R_(X - 6 + i * 9, Y + 11, 5, 4, shade(wall, .8));
+    [X + 2, X + 14, X + 44, X + 56].forEach(ax => { R_(ax, Y + 26, 8, 16, '#1a1420'); R_(ax + 1, Y + 24, 6, 3, '#1a1420'); });
+    R_(b.dx - 10, Y + 22, 20, 24, shade(wall, .6)); R_(b.dx - 8, Y + 20, 16, 4, shade(wall, .6)); bDoor(b, 14, 21, '#100a14', '#3a2a3a'); R_(b.dx - 8, Y + 25, 16, 1, '#8a8a90'); for (let i = 0; i < 4; i++) R_(b.dx - 7 + i * 4, Y + 25, 1, 21, '#5a5a62');
+    [[X - 4, '#e04040'], [X + 62, '#4060e0']].forEach(f => { R_(f[0], Y - 12, 2, 22, '#a0a0a0'); const w = Math.round(Math.sin(time * 4 + f[0]) * 2); R_(f[0] + 2, Y - 11, 10 + w, 7, f[1]); R_(f[0] + 2, Y - 11, 10 + w, 1, '#ffffff'); }); return Y + 16;
+  },
+  wide(b, roof, wall) { // low and wide: veranda, plants, cushions - a calm place
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 4);
+    R_(X - 2, Y + 24, 68, 22, wall); R_(X - 2, Y + 42, 68, 4, shade(wall, .8));
+    R_(X - 6, Y + 14, 76, 8, roof); R_(X - 3, Y + 22, 70, 3, shade(roof, .65)); R_(X + 6, Y + 8, 52, 7, shade(roof, 1.1));
+    for (let i = 0; i < 5; i++) R_(X + i * 15 - 1, Y + 25, 3, 20, '#8a6a40'); R_(X - 4, Y + 44, 72, 3, '#a0824c');
+    bWin(X + 6, Y + 29, 10, 8); bWin(X + 44, Y + 29, 10, 8); bDoor(b, 12, 17, '#5a3a20');
+    [[X - 6, '#40a060'], [X + 66, '#40a060']].forEach(pl => { R_(pl[0], Y + 38, 6, 6, '#a05a3a'); R_(pl[0] - 1, Y + 32, 8, 7, pl[1]); R_(pl[0] + 1, Y + 31, 3, 3, '#e0507a'); });
+    R_(X + 18, Y + 40, 7, 4, '#c04060'); R_(X + 40, Y + 40, 7, 4, '#4060c0'); R_(b.dx - 1, Y + 22, 2, 4, '#c0a060'); R_(b.dx - 3, Y + 26, 6, 4, '#f0d070'); return Y + 15;
+  },
+  cozy(b, roof, wall) { // small and homely: garden fence, mailbox, washing line
+    const X = b.x0, Y = b.y1 - 46; bShadow(b);
+    R_(X + 10, Y + 20, 44, 26, wall); gable(X + 32, Y + 6, Y + 21, 27, roof, shade(roof, .7)); R_(X + 44, Y + 2, 5, 12, '#7a5a4a'); smoke(X + 46, Y + 2);
+    bWin(X + 14, Y + 28, 9, 9); R_(X + 12, Y + 37, 13, 3, '#a05a3a'); R_(X + 13, Y + 35, 3, 3, '#e0507a'); R_(X + 19, Y + 35, 3, 3, '#e0c040'); bDoor(b, 10, 17, '#5a3a20');
+    R_(X + 2, Y + 36, 8, 10, '#f0f0f0'); for (let i = 0; i < 3; i++) R_(X + 3 + i * 3, Y + 36, 1, 10, '#c8c8c8'); R_(X + 54, Y + 36, 8, 10, '#f0f0f0'); for (let i = 0; i < 3; i++) R_(X + 55 + i * 3, Y + 36, 1, 10, '#c8c8c8');
+    R_(X + 64, Y + 30, 2, 16, '#6a4a2a'); R_(X + 62, Y + 28, 8, 6, '#c03030'); R_(X + 62, Y + 28, 8, 1, '#ffb0b0');
+    R_(X - 9, Y + 28, 1, 18, '#6a4a2a'); R_(X - 1, Y + 28, 1, 18, '#6a4a2a'); R_(X - 9, Y + 30, 9, 1, '#e8e8e8'); R_(X - 8, Y + 31, 3, 4, '#4060c0'); R_(X - 4, Y + 31, 3, 5, '#e0c040'); return Y + 8;
+  },
+  gable(b, roof, wall) { // an ordinary pitched-roof house with a tall window and round attic window
+    const X = b.x0, Y = b.y1 - 46; bShadow(b);
+    R_(X + 6, Y + 18, 52, 28, wall); gable(X + 32, Y + 2, Y + 19, 32, roof, shade(roof, .7)); R_(X + 29, Y + 8, 6, 6, '#1a2a4a'); R_(X + 30, Y + 9, 4, 4, lightsOn ? '#ffd870' : '#90c8ff');
+    bWin(X + 12, Y + 24, 8, 12); bWin(X + 44, Y + 24, 8, 12); bDoor(b, 10, 17, '#4a2a1a'); R_(b.dx - 8, Y + 20, 16, 2, shade(roof, .8)); R_(X + 6, Y + 44, 52, 2, shade(wall, .75)); return Y + 4;
+  },
+  temple(b, roof, wall) { // stone steps, pillars, one big upturned roof, gold ornaments, a bell
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 4);
+    R_(X - 2, Y + 42, 68, 4, '#a8a8b8'); R_(X + 2, Y + 38, 60, 4, '#b8b8c8'); R_(X + 8, Y + 22, 48, 17, wall);
+    [X + 8, X + 22, X + 40, X + 53].forEach(px => { R_(px, Y + 20, 4, 20, '#e8e0f0'); R_(px - 1, Y + 20, 6, 2, '#c8c0d8'); });
+    R_(X - 6, Y + 12, 76, 9, roof); R_(X - 10, Y + 10, 8, 3, roof); R_(X + 66, Y + 10, 8, 3, roof); R_(X + 6, Y + 3, 52, 10, shade(roof, 1.15)); R_(X + 26, Y - 4, 12, 8, shade(roof, 1.25)); R_(X + 30, Y - 9, 4, 6, '#f0c860'); R_(X + 28, Y - 10, 8, 2, '#f0c860');
+    bDoor(b, 12, 16, '#2a1a3a', '#f0c860'); R_(X + 5, Y + 24, 1, 8, '#f0c860'); R_(X + 3, Y + 32, 5, 5, '#f0c860'); R_(b.x1 - 2, Y + 36, 4, 6, '#503060'); R_(b.x1 - 3, Y + 34, 6, 3, '#f0c860'); return Y + 15;
+  },
+  tower(b, roof, wall) { // tall and narrow: stacked windows, cone roof, banner
+    const X = b.x0, Y = b.y1 - 46; bShadow(b);
+    R_(X + 18, Y - 22, 28, 68, wall); R_(X + 18, Y + 40, 28, 6, shade(wall, .75)); for (let i = 0; i < 4; i++) bWin(X + 28, Y - 14 + i * 12, 8, 7);
+    R_(X + 14, Y - 24, 36, 4, shade(wall, 1.2)); gable(X + 32, Y - 44, Y - 23, 20, roof, shade(roof, .7)); R_(X + 31, Y - 52, 2, 10, '#c0c0c0'); const w = Math.round(Math.sin(time * 4) * 2); R_(X + 33, Y - 52, 9 + w, 5, '#e04040');
+    bDoor(b, 10, 16, '#3a2a4a'); R_(X + 12, Y + 30, 6, 16, wall); R_(X + 46, Y + 30, 6, 16, wall); return Y + 20;
+  },
+  barn(b, roof, wall) { // big red barn: two-pitch roof, X-braced doors, hay loft, hay bales
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 4);
+    R_(X, Y + 18, 64, 28, wall); R_(X - 2, Y + 12, 68, 7, roof); R_(X + 6, Y + 5, 52, 8, shade(roof, 1.1)); R_(X + 14, Y - 1, 36, 7, roof);
+    R_(b.dx - 10, Y + 24, 20, 22, shade(wall, .8)); R_(b.dx - 10, Y + 24, 20, 1, '#f0f0f0'); ctx.fillStyle = '#f0f0f0'; for (let i = 0; i < 20; i++) { ctx.fillRect(b.dx - 10 + i, Y + 24 + Math.round(i * 22 / 20), 1, 1); ctx.fillRect(b.dx + 9 - i, Y + 24 + Math.round(i * 22 / 20), 1, 1); }
+    bDoor(b, 8, 18, '#2a1408', '#f0f0f0'); R_(b.dx - 5, Y + 4, 10, 8, '#2a1408'); R_(b.dx - 5, Y + 4, 10, 1, '#f0f0f0');
+    R_(X + 68, Y + 34, 12, 12, '#d8b050'); R_(X + 68, Y + 40, 12, 2, '#b89038'); R_(X + 72, Y + 26, 12, 9, '#d8b050'); return Y + 20;
+  },
+  forge(b, roof, wall) { // dark stone forge: tall chimney, glowing opening, anvil, sparks
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 4);
+    R_(X + 4, Y + 22, 56, 24, wall); R_(X - 2, Y + 14, 68, 9, roof); R_(X + 6, Y + 8, 52, 7, shade(roof, .8));
+    R_(X + 46, Y - 12, 9, 24, '#5a4a4a'); R_(X + 45, Y - 13, 11, 3, '#3a2a2a'); smoke(X + 50, Y - 13); ctx.fillStyle = 'rgba(255,90,20,' + (0.5 + 0.3 * Math.sin(time * 6)) + ')'; ctx.fillRect(X + 47, Y - 9, 7, 3);
+    R_(b.dx - 12, Y + 26, 24, 20, '#1a0e08'); R_(b.dx - 9, Y + 30, 18, 16, '#ff7a20'); R_(b.dx - 6, Y + 34, 12, 12, '#ffd060'); bDoor(b, 8, 12, '#2a1408', '#3a2a2a');
+    R_(X - 12, Y + 38, 12, 3, '#404048'); R_(X - 10, Y + 41, 8, 5, '#303038'); ctx.fillStyle = '#ffd060'; for (let i = 0; i < 3; i++) ctx.fillRect(X - 8 + Math.round(Math.sin(time * 9 + i * 2) * 4), Y + 33 - ((time * 20 + i * 5) % 7), 1, 1); return Y + 9;
+  },
+  market(b, roof, wall) { // an open stall: striped awning, crates and goods
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 6);
+    R_(X + 4, Y + 18, 56, 28, shade(wall, .85)); R_(X + 6, Y + 20, 52, 20, '#3a2a20');
+    for (let i = 0; i < 9; i++) R_(X - 4 + i * 8, Y + 12, 8, 12, i % 2 ? '#f0f0f0' : roof); for (let i = 0; i < 9; i++) R_(X - 4 + i * 8, Y + 22, 8, 3, i % 2 ? '#c8c8c8' : shade(roof, .75));
+    R_(X + 2, Y + 36, 60, 10, '#8a5a30'); R_(X + 2, Y + 36, 60, 2, '#c09060'); ['#e04040', '#f0c040', '#40a060', '#e08030', '#a040a0'].forEach((c, i) => { R_(X + 6 + i * 11, Y + 30, 8, 6, c); R_(X + 8 + i * 11, Y + 28, 4, 3, shade(c, 1.2)); });
+    R_(X - 6, Y + 38, 8, 8, '#a06a3a'); R_(X + 62, Y + 38, 8, 8, '#a06a3a'); bDoor(b, 8, 4, '#2a1a10'); return Y + 3;
+  },
+  boat(b, roof, wall) { // boathouse: plank walls, blue roof, a boat with a mast beside it
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 6);
+    R_(X + 2, Y + 20, 48, 26, wall); ctx.fillStyle = shade(wall, .8); for (let i = 0; i < 6; i++) ctx.fillRect(X + 2, Y + 24 + i * 4, 48, 1);
+    gable(X + 26, Y + 4, Y + 21, 28, roof, shade(roof, .7)); bWin(X + 8, Y + 28, 8, 8); bDoor(b, 12, 18, '#4a3018');
+    R_(X + 50, Y + 34, 24, 8, '#8a4a2a'); R_(X + 52, Y + 42, 20, 4, '#6a3a1a'); R_(X + 50, Y + 32, 3, 3, '#8a4a2a'); R_(X + 72, Y + 32, 3, 3, '#8a4a2a'); R_(X + 60, Y + 14, 2, 22, '#d0c090'); R_(X + 62, Y + 16, 10, 12, '#f0f0f0'); R_(X + 62, Y + 16, 10, 1, '#c0d0e0'); return Y + 6;
+  },
+  manor(b, roof, wall) { // a stately building: columns, pediment, clock or crest
+    const X = b.x0, Y = b.y1 - 46; bShadow(b, 4);
+    R_(X, Y + 12, 64, 34, wall); R_(X - 3, Y + 8, 70, 5, shade(wall, 1.15)); gable(X + 32, Y - 6, Y + 8, 34, roof, shade(roof, .7)); R_(X + 27, Y - 1, 10, 9, '#f0f0f0'); R_(X + 32, Y + 1, 1, 4, '#101010'); R_(X + 32, Y + 4, 3, 1, '#101010');
+    [X + 4, X + 16, X + 44, X + 56].forEach(px => { R_(px, Y + 14, 4, 30, '#f0eee8'); R_(px - 1, Y + 14, 6, 2, '#d0ccc0'); R_(px - 1, Y + 42, 6, 2, '#d0ccc0'); });
+    bWin(X + 24, Y + 20, 5, 8); bWin(X + 36, Y + 20, 5, 8); bDoor(b, 12, 18, '#2a1a10', '#d0ccc0'); R_(X - 3, Y + 44, 70, 2, '#a8a8b0'); return Y + 10;
+  }
+};
+BSTYLE.house = BSTYLE.gable;
 function vBuilding(b, roof, wall, label) {
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(b.x0 + 3, b.y1, b.x1 - b.x0, 4);
-  ctx.fillStyle = wall; ctx.fillRect(b.x0 + 4, b.y0 + 14, b.x1 - b.x0 - 8, b.y1 - b.y0 - 14);
-  ctx.fillStyle = shade(wall, .8); ctx.fillRect(b.x0 + 4, b.y1 - 4, b.x1 - b.x0 - 8, 4);
-  ctx.fillStyle = shade(roof, .7); ctx.fillRect(b.x0, b.y0 + 12, b.x1 - b.x0, 4);
-  ctx.fillStyle = roof; ctx.fillRect(b.x0, b.y0 + 2, b.x1 - b.x0, 12); ctx.fillRect(b.x0 + 6, b.y0 - 4, b.x1 - b.x0 - 12, 8);
-  ctx.fillStyle = shade(roof, 1.25); ctx.fillRect(b.x0 + 6, b.y0 - 4, b.x1 - b.x0 - 12, 2);
-  ctx.fillStyle = '#2a1a10'; ctx.fillRect(b.dx - 7, b.y1 - 18, 14, 18); ctx.fillStyle = '#f0c040'; ctx.fillRect(b.dx + 3, b.y1 - 9, 2, 2);
-  ctx.fillStyle = '#1a2a4a'; ctx.fillRect(b.x0 + 10, b.y0 + 22, 10, 10); ctx.fillRect(b.x1 - 20, b.y0 + 22, 10, 10);
-  ctx.fillStyle = '#90c8ff'; ctx.fillRect(b.x0 + 11, b.y0 + 23, 8, 8); ctx.fillRect(b.x1 - 19, b.y0 + 23, 8, 8);
-  textS(label, Math.round((b.x0 + b.x1) / 2 - textW(label) / 2), b.y0 + 4, '#ffffff', 1);
+  const fn = BSTYLE[b.style] || BSTYLE.house, ly = fn(b, roof, wall);
+  if (!params.get('nolabels')) textS(label, Math.round((b.x0 + b.x1) / 2 - textW(label) / 2), ly - 2, '#ffffff', 1);
 }
 function vPerson(x, y, body, hair, small, step, face) {
   const s = small ? .75 : 1, bob = step ? Math.abs(Math.sin(step)) * 1.5 : 0, X = Math.round(x), Y = Math.round(y - bob), r = (a, b, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(X + a * s), Math.round(Y + b * s), Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))); };
@@ -1866,6 +1971,7 @@ function drawRoom() {
   { const rn = area === 'hut' ? hutTitle : r.name; textS(rn, Math.round(r.w / 2 - textW(rn) / 2), 4, '#ffe060', 1); }
 }
 function drawWorld() {
+  lightsOn = trainOf().sessions <= 1;
   ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, WORLD.w, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, WORLD.w, 12);
   ctx.fillStyle = '#4a3a70'; [[0, 30, 70], [60, 26, 90], [170, 30, 80], [240, 24, 80], [330, 28, 90], [420, 24, 100], [520, 30, 80], [590, 26, 60]].forEach(m => ctx.fillRect(m[0], m[1], m[2], 10));
   ctx.fillStyle = '#2f6b3a'; ctx.fillRect(0, 34, WORLD.w, WORLD.h - 34);
@@ -1883,7 +1989,6 @@ function drawWorld() {
   ctx.fillStyle = '#a08850'; ctx.fillRect(L.x0 + 60, L.y1 - 2, 20, 26);
   vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_RAMEN, '#c07a20', '#d8c090', 'RAMEN'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA');
   vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE'); vBuilding(V_HOME, '#7a4a8a', '#d8c8a8', 'YOUR HOME');
-  ctx.fillStyle = 'rgba(230,230,230,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(176 + Math.sin(u * 6) * 3), Math.round(46 - u * 22), 3, 3); }
   const items = V_TREES.filter(tr => tr.x > camX - 20 && tr.x < camX + CW + 20 && tr.y > camY - 10 && tr.y < camY + 240).map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
   V_SIGNS.forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
   items.push({ y: V_ELDER.y, draw: () => { const ex = V_ELDER.x, ey = V_ELDER.y; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3); ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26); } });
@@ -2210,7 +2315,7 @@ Object.keys(ROUTE_DEF).forEach(k => {
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
-  T.bl = T.b.map(sp => { const x0 = 30 + sp[1] * 104, y0 = sp[2] ? 150 : 40; return { label: sp[0], roof: sp[3], wall: sp[4], role: sp[5], extra: sp[6] || {}, x0, y0, x1: x0 + 64, y1: y0 + 46, dx: x0 + 32 }; });
+  T.bl = T.b.map(sp => { const x0 = 30 + sp[1] * 104, y0 = sp[2] ? 150 : 40; return { label: sp[0], roof: sp[3], wall: sp[4], role: sp[5], extra: sp[6] || {}, style: styleFor(sp[0], sp[5], sp[6]), x0, y0, x1: x0 + 64, y1: y0 + 46, dx: x0 + 32 }; });
   T.pp = T.people.map((p, i) => { const s = p.zone === 'r1' && T.streets[1] ? T.streets[1] : T.streets[0]; p.zone = [40, s[0] + 4, T.w - 40, s[1] - 2]; p.x = 60 + ((i * 131) % (T.w - 120)); p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .6; p.face = 1; p.step = 0; p.line = 0; return p; });
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
@@ -2357,6 +2462,7 @@ function drawMap() {
 }
 // ---------- drawing a town or a road ----------
 function drawTown() {
+  lightsOn = trainOf().sessions <= 1;
   const T = TOWNS[area], rr = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }, town = T.kind === 'town';
   rr(0, 0, T.w, 34, T.sky[0]); rr(0, 22, T.w, 12, T.sky[1]);
   ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < T.w; i += 90) ctx.fillRect(i, 26 - ((i / 90) % 3) * 3, 60, 10);
