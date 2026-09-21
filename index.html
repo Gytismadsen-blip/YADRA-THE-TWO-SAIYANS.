@@ -1429,64 +1429,92 @@ function drawTrain() {
   if (trFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + trFlash + ')'; ctx.fillRect(0, 26, W, 130); }
 }
 
-// ================= the village: walk around, talk to people, eat, train, fight =================
-const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_RAMEN = { x0: 128, y0: 50, x1: 192, y1: 96, dx: 160 }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 };
-const V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 }, V_HOME = { x0: 232, y0: 124, x1: 296, y1: 160, dx: 264 };
-const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 112 }, { x: 118, y: 150 }, { x: 22, y: 188 }, { x: 302, y: 190 }];
+// ================= the world: a big scrolling village, plus rooms you can walk into =================
+const WORLD = { w: 640, h: 400 };
+const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_RAMEN = { x0: 128, y0: 50, x1: 192, y1: 96, dx: 160, enter: 'ramen' }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 };
+const V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 }, V_HOME = { x0: 232, y0: 124, x1: 296, y1: 160, dx: 264, enter: 'home' };
+const V_LAKE = { x0: 380, y0: 232, x1: 540, y1: 320 };
+const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 134 }, { x: 118, y: 150 }, { x: 22, y: 188 }, { x: 302, y: 190 }];
+for (let x = 330; x < 632; x += 26) { V_TREES.push({ x: x + ((x / 26) % 2) * 8, y: 70 + ((x / 26) % 3) * 10 }); } // treeline north of the east path
+for (let i = 0; i < 70; i++) { const x = 340 + ((i * 97) % 290), y = 132 + ((i * 61) % 262); if (x > V_LAKE.x0 - 14 && x < V_LAKE.x1 + 14 && y > V_LAKE.y0 - 14 && y < V_LAKE.y1 + 24) continue; if (y > 300 && y < 336 && x < 372) continue; V_TREES.push({ x, y }); }
+for (let i = 0; i < 16; i++) V_TREES.push({ x: 10 + ((i * 41) % 130), y: 350 + ((i * 29) % 44) }); // south-west woods
+const V_SIGNS = [{ x: 318, y: 124, text: 'EAST: THE FOREST PATH. TRAVELLERS WELCOME.' }, { x: 618, y: 124, text: 'THE GATE IS SHUT. ROKU SAYS THE FOREST IS NOT SAFE YET.' }, { x: 170, y: 322, text: 'LAKE THIS WAY. NO FEEDING THE FISH ROKU.' }];
+const ROOMS = {
+  home: { w: 200, h: 140, door: 100, miny: 56, name: 'YOUR HOME', solids: [[12, 58, 60, 76], [92, 74, 144, 90], [116, 30, 184, 52]] },
+  ramen: { w: 240, h: 150, door: 120, miny: 70, name: 'RAMEN HOUSE', solids: [[24, 52, 216, 68], [36, 92, 80, 110], [160, 96, 204, 114]] } };
+const ROOM_PEOPLE = {
+  home: [{ name: 'MOM', role: 'mom', x: 152, y: 80, body: '#e0a0c0', hair: '#603020', lines: ['MOM: YOU TRAIN TOO HARD. SIT. EAT.'] }],
+  ramen: [
+    { name: 'COOK', role: 'cook', x: 120, y: 52, body: '#f4f4f4', hair: '#402010', lines: [] },
+    { name: 'GUEST', x: 58, y: 96, body: '#c05030', hair: '#101010', lines: ['I ATE A FEAST BEFORE MY LAST FIGHT. I COULD BARELY MOVE.', 'THE SOUP CALMS YOU DOWN AFTER HARD TRAINING.'] },
+    { name: 'GUEST', x: 184, y: 100, body: '#4060a0', hair: '#c0c0c0', lines: ['THE COOK USED TO TRAIN WITH ROKU. DO NOT ASK HOW HE LOST.', 'A BIG MEAL IS SMALL. A FEAST IS A GAMBLE.'] }] };
 const MEALS = [
   { n: 'SOUP', turns: 1, hp: 0, str: -20, d: 'STRAIN -20', short: 'STRAIN -20' },
   { n: 'BIG MEAL', turns: 1, hp: 15, str: 10, d: '+15 HP FIGHT, STRAIN +10', short: '+15 HP  STR +10' },
   { n: 'FEAST', turns: 2, hp: 30, str: 25, d: '+30 HP FIGHT, STRAIN +25', short: '+30 HP  STR +25' }];
-// villagers: they wander inside a zone and say a few lines. kind 'dog' only barks.
+// villagers wander inside a zone and say a few lines. 'dog' only barks.
 const V_PEOPLE = [
-  { name: 'COOK', body: '#e8e8e8', hair: '#402010', zone: [120, 100, 200, 116], lines: ['MY RAMEN GIVES YOU HP FOR THE FIGHT. BUT A FULL BELLY MAKES YOU SLOW.', 'A FEAST TAKES TWO TURNS. BE SURE YOU WANT IT.'] },
+  { name: 'GUEST', body: '#e8e8e8', hair: '#402010', zone: [120, 100, 200, 116], lines: ['THE RAMEN HOUSE GIVES YOU HP FOR THE FIGHT. GO INSIDE!', 'I WAIT FOR A TABLE. THE FEAST TAKES FOREVER.'] },
   { name: 'GIRL', body: '#e06080', hair: '#f0c040', zone: [60, 100, 130, 116], lines: ['I WATCHED YOU TRAIN. THE FLOOR SHOOK!', 'ROKU NEVER LOST HERE. NOT ONCE.'] },
   { name: 'BOY', body: '#40a060', hair: '#202020', zone: [130, 128, 220, 186], small: true, lines: ['CAN YOU TEACH ME A KI BLAST? PLEASE?', 'WHEN I GROW UP I WILL BEAT ROKU. WATCH ME!'] },
-  { name: 'FARMER', body: '#a07040', hair: '#c0c0c0', zone: [100, 170, 200, 190], lines: ['EAT BEFORE YOU FIGHT. EMPTY STOMACH, EMPTY KI.', 'THE FISH IN THIS LAND ARE HUGE. SO ARE THE APPETITES.'] },
+  { name: 'FARMER', body: '#a07040', hair: '#c0c0c0', zone: [40, 244, 130, 330], lines: ['EAT BEFORE YOU FIGHT. EMPTY STOMACH, EMPTY KI.', 'MY CROPS GROW BEST WHEN ROKU IS NOT TRAINING NEARBY.'] },
   { name: 'FIGHTER', body: '#c05030', hair: '#101010', zone: [200, 100, 280, 116], lines: ['GRAVITY 20X? YOU ARE CRAZY. I LIKE IT.', 'SPIRIT SENSE WORKS BEST WHEN YOU STAY CALM.'] },
-  { name: 'DOG', body: '#c89060', hair: '#c89060', zone: [10, 165, 110, 190], dog: true, lines: ['WOOF!', 'WOOF WOOF!'] }];
+  { name: 'DOG', body: '#c89060', hair: '#c89060', zone: [10, 165, 110, 190], dog: true, lines: ['WOOF!', 'WOOF WOOF!'] },
+  { name: 'FISHER', body: '#4080c0', hair: '#402010', zone: [390, 326, 530, 346], lines: ['THE FISH HERE ARE HUGE. SO ARE THE APPETITES.', 'SHH! I AM WAITING FOR A BIG ONE.'] },
+  { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
+  { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
 const V_TIPS = ['ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
-let vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null;
+let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
+Object.keys(ROOM_PEOPLE).forEach(k => ROOM_PEOPLE[k].forEach(p => { p.face = 1; p.step = 0; p.line = 0; }));
+function curPeople() { return area === 'village' ? V_PEOPLE : ROOM_PEOPLE[area]; }
 function toVillage(line) {
-  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vMenu = null; vx = 140; vy = 178; vFace = 1; vFlash = 0;
+  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vMenu = null; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
-function vNearPerson() { let best = -1, bd = 26; V_PEOPLE.forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
+function enterRoom(name) { area = name; vx = ROOMS[name].door; vy = ROOMS[name].h - 16; vFade = 1; vWalk = 0; vMsg = ''; sfx('ok'); }
+function exitRoom() { const b = area === 'home' ? V_HOME : V_RAMEN; area = 'village'; vx = b.dx; vy = b.y1 + 12; vFade = 1; vWalk = 0; vMsg = 'WALK TO A BUILDING.'; sfx('move'); }
+function vNearPerson() { let best = -1, bd = 26; curPeople().forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
-  const up = vy <= 116, low = (b) => vy >= b.y1 && vy <= b.y1 + 18 && Math.abs(vx - b.dx) <= 22;
-  if (up && Math.abs(vx - V_TRAIN.dx) <= 22) return 'train';
-  if (up && Math.abs(vx - V_RAMEN.dx) <= 22) return 'ramen';
-  if (up && Math.abs(vx - V_ARENA.dx) <= 22) return 'arena';
-  if (low(V_REST)) return 'rest';
-  if (low(V_HOME)) return 'home';
+  if (area !== 'village') return vNearPerson() >= 0 ? 'person' : null;
+  const low = (b) => vy >= b.y1 + 2 && vy <= b.y1 + 22 && Math.abs(vx - b.dx) <= 22;
+  if (low(V_TRAIN)) return 'train'; if (low(V_RAMEN)) return 'ramen'; if (low(V_ARENA)) return 'arena'; if (low(V_REST)) return 'rest'; if (low(V_HOME)) return 'home';
   if (Math.hypot(vx - V_ELDER.x, vy - V_ELDER.y) < 28) return 'elder';
+  if (V_SIGNS.some(s => Math.hypot(vx - s.x, vy - s.y) < 22)) return 'sign';
   return vNearPerson() >= 0 ? 'person' : null;
 }
 function vSolid(x, y) {
+  if (area !== 'village') return ROOMS[area].solids.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3]);
   const inB = b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1;
-  if (inB(V_REST) || inB(V_HOME)) return true;
+  if (inB(V_TRAIN) || inB(V_RAMEN) || inB(V_ARENA) || inB(V_REST) || inB(V_HOME)) return true;
+  if (x > V_LAKE.x0 && x < V_LAKE.x1 && y > V_LAKE.y0 + 8 && y < V_LAKE.y1 + 6) return true;
   if (Math.hypot(x - V_ELDER.x, y - V_ELDER.y) < 9) return true;
   return V_TREES.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function villageUpdate(dt) {
-  if (vFlash > 0) vFlash -= dt;
+  if (vFlash > 0) vFlash -= dt; if (vFade > 0) vFade = Math.max(0, vFade - dt * 3);
   const near = vNearPerson();
-  V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
+  if (area === 'village') V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
     if (i === near || vTalk) return;
     if (p.wait > 0) { p.wait -= dt; return; }
     const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
     if (d < 2) { p.wait = 1 + Math.random() * 2.5; p.tx = p.zone[0] + Math.random() * (p.zone[2] - p.zone[0]); p.ty = p.zone[1] + Math.random() * (p.zone[3] - p.zone[1]); p.step = 0; return; }
     const sp = (p.dog ? 34 : 22) * dt; p.x += dx / d * sp; p.y += dy / d * sp; p.step += dt * 8; if (Math.abs(dx) > 1) p.face = dx > 0 ? 1 : -1;
   });
-  if (vTalk || vMenu) return;
-  const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
-  if (dx || dy) {
-    const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
-    const nx = Math.max(10, Math.min(310, vx + dx * sp)), ny = Math.max(98, Math.min(192, vy + dy * sp));
-    if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
-  } else vWalk = 0;
+  if (!vTalk && !vMenu) {
+    const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
+    if (dx || dy) {
+      const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
+      let minX = 10, maxX = WORLD.w - 10, minY = 100, maxY = WORLD.h - 8;
+      if (area !== 'village') { const r = ROOMS[area]; minX = 10; maxX = r.w - 10; minY = r.miny; maxY = r.h - 8; if (Math.abs(vx - r.door) <= 18) maxY = r.h; }
+      const nx = Math.max(minX, Math.min(maxX, vx + dx * sp)), ny = Math.max(minY, Math.min(maxY, vy + dy * sp));
+      if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
+      if (area !== 'village' && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
+    } else vWalk = 0;
+  }
+  if (area === 'village') { camX = Math.round(Math.max(0, Math.min(WORLD.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(WORLD.h - 196, vy - 100))); }
+  else { const r = ROOMS[area]; camX = -Math.round((320 - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
 }
 function vEat(m) {
   const t = trainOf();
@@ -1505,24 +1533,29 @@ function villagePress(k) {
     else if (k === 'ok') vEat(MEALS[vMenu.idx]);
     return true;
   }
-  if (k === 'back') { sfx('move'); toTitle(); return true; }
+  if (k === 'back') { if (area !== 'village') { exitRoom(); return true; } sfx('move'); toTitle(); return true; }
   if (k !== 'ok') return true;
   const t = trainOf(), tg = vTarget();
   if (tg === 'train') { sfx('ok'); toTrain('ROKU: PICK YOUR TRAINING.'); }
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
-  else if (tg === 'ramen') { sfx('ok'); vMenu = { idx: 0 }; }
-  else if (tg === 'home') {
-    if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
-    else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = "MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)"; }
-    say(vTalk);
-  } else if (tg === 'rest') {
+  else if (tg === 'ramen') enterRoom('ramen');
+  else if (tg === 'home') enterRoom('home');
+  else if (tg === 'rest') {
     if (t.sessions <= 0) { sfx('bad'); vMsg = 'NO TURNS LEFT. GO FIGHT.'; }
     else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
     else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
+  } else if (tg === 'sign') {
+    const s = V_SIGNS.find(q => Math.hypot(vx - q.x, vy - q.y) < 22); sfx('ok'); vTalk = s.text; say(vTalk);
   } else if (tg === 'person') {
-    const p = V_PEOPLE[vNearPerson()]; sfx(p.dog ? 'move' : 'ok'); vTalk = (p.dog ? '' : p.name + ': ') + p.lines[p.line++ % p.lines.length]; say(vTalk);
+    const p = curPeople()[vNearPerson()];
+    if (p.role === 'cook') { sfx('ok'); vMenu = { idx: 0 }; }
+    else if (p.role === 'mom') {
+      if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
+      else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = 'MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)'; }
+      say(vTalk);
+    } else { sfx(p.dog ? 'move' : 'ok'); vTalk = (p.dog ? '' : p.name + ': ') + p.lines[p.line++ % p.lines.length]; say(vTalk); }
   }
   return true;
 }
@@ -1555,26 +1588,67 @@ function vTree(t) {
   ctx.fillStyle = '#1f5a2a'; ctx.fillRect(t.x - 10, t.y - 26, 20, 16); ctx.fillRect(t.x - 6, t.y - 32, 12, 8);
   ctx.fillStyle = '#2f7a3a'; ctx.fillRect(t.x - 8, t.y - 24, 8, 6); ctx.fillRect(t.x - 4, t.y - 30, 6, 4);
 }
-function drawVillage() {
-  const t = trainOf(), tg = vTarget();
-  ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, W, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, W, 12);
-  ctx.fillStyle = '#4a3a70'; [[0, 30, 70], [60, 26, 90], [170, 30, 80], [240, 24, 80]].forEach(m => ctx.fillRect(m[0], m[1], m[2], 10));
-  ctx.fillStyle = '#2f6b3a'; ctx.fillRect(0, 34, W, H - 34);
-  ctx.fillStyle = '#3a7d45'; for (let i = 0; i < 40; i++) ctx.fillRect((i * 53) % 310, 40 + ((i * 37) % 150), 3, 2);
-  ctx.fillStyle = '#e8d060'; for (let i = 0; i < 14; i++) ctx.fillRect(12 + ((i * 71) % 296), 124 + ((i * 41) % 66), 2, 2);
-  ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(258, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(154, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
-  ctx.fillStyle = '#a08850'; for (let i = 0; i < 24; i++) ctx.fillRect(44 + i * 10, 104 + (i % 3) * 5, 3, 2);
-  vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_RAMEN, '#c07a20', '#d8c090', 'RAMEN'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA');
-  vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE'); vBuilding(V_HOME, '#7a4a8a', '#d8c8a8', 'YOUR HOME');
-  // smoke from the ramen house
-  ctx.fillStyle = 'rgba(230,230,230,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(176 + Math.sin(u * 6) * 3), Math.round(46 - u * 22), 3, 3); }
-  // everything that stands on the ground, back to front
-  const items = V_TREES.map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
-  items.push({ y: V_ELDER.y, draw: () => { const ex = V_ELDER.x, ey = V_ELDER.y; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3); ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26); } });
-  V_PEOPLE.forEach(p => items.push({ y: p.y, draw: () => p.dog ? vDog(p.x, p.y, p.body, p.step, p.face) : vPerson(p.x, p.y, p.body, p.hair, p.small, p.step, p.face) }));
+function vSign(s) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 1, s.y - 12, 3, 12); ctx.fillStyle = '#c8a060'; ctx.fillRect(s.x - 8, s.y - 20, 16, 10); ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 5, s.y - 16, 10, 2); }
+function drawPeopleAndPlayer(extra) {
+  const items = extra || [];
+  curPeople().forEach(p => items.push({ y: p.y, draw: () => p.dog ? vDog(p.x, p.y, p.body, p.step, p.face) : vPerson(p.x, p.y, p.body, p.hair, p.small, p.step, p.face) }));
   items.push({ y: vy, draw: () => { const bob = vWalk ? Math.abs(Math.sin(vWalk)) * 2 : 0, w = P.set.w, h = P.set.h; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(vx - 8), Math.round(vy - 1), 16, 3); ctx.save(); ctx.translate(Math.round(vx), Math.round(vy - bob)); ctx.scale(vFace < 0 ? -1 : 1, 1); ctx.drawImage(P.set.img.idle0, -Math.round(w / 2), -h + 2, w, h); ctx.restore(); } });
   items.sort((a, b) => a.y - b.y).forEach(i => i.draw());
-  if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const ax = tg === 'elder' ? V_ELDER.x : V_PEOPLE[vNearPerson()].x, ay = tg === 'elder' ? V_ELDER.y - 40 : V_PEOPLE[vNearPerson()].y - 38; textS('!', Math.round(ax) - 2, Math.round(ay), '#ffe060', 2); }
+}
+function drawRoom() {
+  const r = ROOMS[area], rr = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  rr(-320, -200, 840, 600, '#0a0a14');
+  rr(0, 40, r.w, r.h - 40, '#8a6a44'); ctx.fillStyle = '#7a5a38'; for (let y = 48; y < r.h; y += 10) ctx.fillRect(0, y, r.w, 1);
+  rr(0, 0, r.w, 40, '#5a4a6a'); rr(0, 36, r.w, 4, '#3a2a4a'); rr(0, 0, r.w, 2, '#7a6a8a');
+  rr(r.door - 14, r.h - 8, 28, 8, '#6a3a2a'); rr(r.door - 12, r.h - 6, 24, 4, '#8a4a3a');
+  if (area === 'home') {
+    rr(20, 8, 26, 20, '#3a2a4a'); rr(22, 10, 22, 16, '#90c8ff'); rr(32, 10, 2, 16, '#3a2a4a'); rr(22, 17, 22, 2, '#3a2a4a');
+    rr(60, 100, 80, 24, '#a04040'); rr(62, 102, 76, 20, '#c05050'); rr(70, 108, 60, 8, '#e0c060');
+    rr(12, 58, 48, 18, '#7a4a2a'); rr(14, 52, 44, 8, '#e8e8f0'); rr(16, 46, 14, 8, '#f8f8ff'); rr(14, 60, 44, 14, '#5a7ac0');
+    rr(92, 74, 52, 16, '#a06a3a'); rr(92, 88, 52, 3, '#7a4a2a'); rr(100, 70, 8, 5, '#f0f0f0'); rr(116, 70, 8, 5, '#f0f0f0'); rr(130, 71, 8, 4, '#e0a040');
+    rr(116, 30, 68, 22, '#6a6a7a'); rr(116, 30, 68, 3, '#8a8a9a'); rr(126, 22, 14, 12, '#404050'); rr(128, 20, 10, 3, '#303040'); rr(160, 34, 14, 14, '#404050');
+    rr(150, 8, 30, 20, '#7a5a3a'); rr(152, 10, 26, 16, '#e0c880'); textS('HOME', 156, 15, '#7a4a2a', 1);
+  } else {
+    rr(20, 8, 200, 4, '#3a2a4a'); [[30, '#c04040'], [70, '#e0a040'], [110, '#40a060'], [150, '#4060c0'], [190, '#c040a0']].forEach(l => { rr(l[0], 12, 4, 10, '#e8e0c8'); rr(l[0] - 4, 20, 12, 12, l[1]); });
+    rr(24, 44, 192, 24, '#8a5a30'); rr(24, 44, 192, 6, '#c09060'); rr(24, 62, 192, 6, '#6a4020');
+    rr(100, 40, 8, 5, '#f0f0f0'); rr(136, 40, 10, 6, '#e08040'); rr(60, 40, 12, 6, '#d0d0d8'); rr(170, 40, 12, 6, '#d0d0d8');
+    [[36, 92], [160, 96]].forEach(t => { rr(t[0], t[1], 44, 14, '#a06a3a'); rr(t[0], t[1] + 12, 44, 3, '#7a4a2a'); rr(t[0] + 6, t[1] - 3, 10, 5, '#f0f0f0'); rr(t[0] + 26, t[1] - 3, 10, 5, '#f0f0f0'); rr(t[0] + 4, t[1] + 15, 8, 6, '#6a3a1a'); rr(t[0] + 32, t[1] + 15, 8, 6, '#6a3a1a'); });
+    textS('MENU', 200, 24, '#ffe060', 1);
+  }
+  drawPeopleAndPlayer();
+  textS(r.name, Math.round(r.w / 2 - textW(r.name) / 2), 4, '#ffe060', 1);
+}
+function drawWorld() {
+  ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, WORLD.w, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, WORLD.w, 12);
+  ctx.fillStyle = '#4a3a70'; [[0, 30, 70], [60, 26, 90], [170, 30, 80], [240, 24, 80], [330, 28, 90], [420, 24, 100], [520, 30, 80], [590, 26, 60]].forEach(m => ctx.fillRect(m[0], m[1], m[2], 10));
+  ctx.fillStyle = '#2f6b3a'; ctx.fillRect(0, 34, WORLD.w, WORLD.h - 34);
+  ctx.fillStyle = '#3a7d45'; for (let i = 0; i < 120; i++) ctx.fillRect((i * 53) % 630, 40 + ((i * 37) % 350), 3, 2);
+  ctx.fillStyle = '#e8d060'; for (let i = 0; i < 40; i++) ctx.fillRect(12 + ((i * 71) % 610), 124 + ((i * 41) % 260), 2, 2);
+  ctx.fillStyle = '#e07090'; for (let i = 0; i < 20; i++) ctx.fillRect(30 + ((i * 113) % 590), 130 + ((i * 59) % 250), 2, 2);
+  ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(258, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(154, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
+  ctx.fillRect(280, 102, 350, 16); ctx.fillRect(154, 118, 12, 214); ctx.fillRect(154, 320, 228, 12);
+  ctx.fillStyle = '#a08850'; for (let i = 0; i < 24; i++) ctx.fillRect(44 + i * 10, 104 + (i % 3) * 5, 3, 2); for (let i = 0; i < 34; i++) ctx.fillRect(284 + i * 10, 106 + (i % 3) * 4, 3, 2);
+  // fields
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(34, 244 + i * 14, 96, 8); ctx.fillStyle = '#4a9a3a'; for (let j = 0; j < 12; j++) ctx.fillRect(38 + j * 8, 242 + i * 14, 3, 5); }
+  // lake
+  const L = V_LAKE; ctx.fillStyle = '#2a6aa8'; ctx.fillRect(L.x0, L.y0, L.x1 - L.x0, L.y1 - L.y0); ctx.fillStyle = '#4a8ac8'; ctx.fillRect(L.x0 + 4, L.y0 + 4, L.x1 - L.x0 - 8, L.y1 - L.y0 - 8);
+  ctx.fillStyle = '#8ac0f0'; for (let i = 0; i < 9; i++) { const u = (time * .5 + i * .37) % 1; ctx.fillRect(Math.round(L.x0 + 14 + (i * 41) % 130), Math.round(L.y0 + 12 + (i * 23) % 60 + Math.sin(u * 6.28) * 2), 8, 2); }
+  ctx.fillStyle = '#a08850'; ctx.fillRect(L.x0 + 60, L.y1 - 2, 20, 26);
+  vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_RAMEN, '#c07a20', '#d8c090', 'RAMEN'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA');
+  vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE'); vBuilding(V_HOME, '#7a4a8a', '#d8c8a8', 'YOUR HOME');
+  ctx.fillStyle = 'rgba(230,230,230,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(176 + Math.sin(u * 6) * 3), Math.round(46 - u * 22), 3, 3); }
+  const items = V_TREES.filter(tr => tr.x > camX - 20 && tr.x < camX + 340 && tr.y > camY - 10 && tr.y < camY + 240).map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
+  V_SIGNS.forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
+  items.push({ y: V_ELDER.y, draw: () => { const ex = V_ELDER.x, ey = V_ELDER.y; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3); ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26); } });
+  drawPeopleAndPlayer(items);
+}
+function drawVillage() {
+  const t = trainOf(), tg = vTarget();
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, 196); ctx.clip(); ctx.translate(-camX, -camY);
+  if (area === 'village') drawWorld(); else drawRoom();
+  if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const q = tg === 'elder' ? { x: V_ELDER.x, y: V_ELDER.y - 40 } : (p => ({ x: p.x, y: p.y - 38 }))(curPeople()[vNearPerson()]); textS('!', Math.round(q.x) - 2, Math.round(q.y), '#ffe060', 2); }
+  ctx.restore();
   // top bar
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 12);
   textS(hero.name, 6, 3, '#80c8ff', 1); textS('TURNS ' + t.sessions, 80, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
@@ -1589,13 +1663,15 @@ function drawVillage() {
     wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
   } else if (tg) {
-    const p = tg === 'person' ? V_PEOPLE[vNearPerson()] : null;
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], ramen: ['RAMEN HOUSE', 'EAT FOR HP IN THE FIGHT.'], home: ['YOUR HOME', t.mom ? 'MOM ALREADY FED YOU.' : 'MOM COOKS. FREE, STRAIN -10.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], person: [p ? (p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name) : '', ''] }[tg];
+    const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
+    const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', 'SOUP, BIG MEAL OR FEAST.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, '']) : ['', ''];
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
-    textS('WALK TO A BUILDING.', 8, 226, '#8888b0', 1);
+    textS(area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : 'WALK DOWN TO LEAVE.', 8, 226, '#8888b0', 1);
   }
+  if (vFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + vFade + ')'; ctx.fillRect(0, 0, W, 196); }
   if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, W, 196); }
 }
 function menuRender() {
