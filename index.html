@@ -90,7 +90,7 @@
     st = st || {};
     const n = v => Math.max(0, Math.min(12, v | 0));
     const b = n(st.body), k = n(st.ki), fo = n(st.focus), fat = Math.max(0, Math.min(80, st.fatigue | 0));
-    CFG.player.hp += CFG.train.hpPerBody * b; CFG.strainDecay += CFG.train.decayPerBody * b;
+    CFG.player.hp += CFG.train.hpPerBody * b + Math.max(0, Math.min(80, st.meal | 0)); CFG.strainDecay += CFG.train.decayPerBody * b;
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
@@ -1183,7 +1183,7 @@ function recordFight(win) { // progress is saved after every fight
   saveData.fights = (saveData.fights || 0) + 1;
   if (win) { saveData.wins = (saveData.wins || 0) + 1; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
-  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15);
+  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15); t.meal = 0; t.mom = false;
   saveData.savedAt = Date.now();
   return writeSlot(curSlot, saveData);
 }
@@ -1348,7 +1348,7 @@ function trainOf() {
   const t = saveData.train || (saveData.train = {});
   const n = (v, lo, hi, d) => Math.max(lo, Math.min(hi, v === undefined ? d : (v | 0)));
   t.body = n(t.body, 0, STAT_MAX, 0); t.ki = n(t.ki, 0, STAT_MAX, 0); t.focus = n(t.focus, 0, STAT_MAX, 0);
-  t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
+  t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
   return t;
 }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
@@ -1429,48 +1429,100 @@ function drawTrain() {
   if (trFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + trFlash + ')'; ctx.fillRect(0, 26, W, 130); }
 }
 
-// ================= the village: walk around and pick a building =================
-const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 }, V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 };
-const V_ELDER = { x: 262, y: 150 };
+// ================= the village: walk around, talk to people, eat, train, fight =================
+const V_TRAIN = { x0: 24, y0: 50, x1: 88, y1: 96, dx: 56 }, V_RAMEN = { x0: 128, y0: 50, x1: 192, y1: 96, dx: 160 }, V_ARENA = { x0: 232, y0: 50, x1: 296, y1: 96, dx: 264 };
+const V_REST = { x0: 24, y0: 124, x1: 88, y1: 160, dx: 56 }, V_HOME = { x0: 232, y0: 124, x1: 296, y1: 160, dx: 264 };
+const V_TREES = [{ x: 16, y: 112 }, { x: 304, y: 112 }, { x: 118, y: 150 }, { x: 22, y: 188 }, { x: 302, y: 190 }];
+const MEALS = [
+  { n: 'SOUP', turns: 1, hp: 0, str: -20, d: 'STRAIN -20', short: 'STRAIN -20' },
+  { n: 'BIG MEAL', turns: 1, hp: 15, str: 10, d: '+15 HP FIGHT, STRAIN +10', short: '+15 HP  STR +10' },
+  { n: 'FEAST', turns: 2, hp: 30, str: 25, d: '+30 HP FIGHT, STRAIN +25', short: '+30 HP  STR +25' }];
+// villagers: they wander inside a zone and say a few lines. kind 'dog' only barks.
+const V_PEOPLE = [
+  { name: 'COOK', body: '#e8e8e8', hair: '#402010', zone: [120, 100, 200, 116], lines: ['MY RAMEN GIVES YOU HP FOR THE FIGHT. BUT A FULL BELLY MAKES YOU SLOW.', 'A FEAST TAKES TWO TURNS. BE SURE YOU WANT IT.'] },
+  { name: 'GIRL', body: '#e06080', hair: '#f0c040', zone: [60, 100, 130, 116], lines: ['I WATCHED YOU TRAIN. THE FLOOR SHOOK!', 'ROKU NEVER LOST HERE. NOT ONCE.'] },
+  { name: 'BOY', body: '#40a060', hair: '#202020', zone: [130, 128, 220, 186], small: true, lines: ['CAN YOU TEACH ME A KI BLAST? PLEASE?', 'WHEN I GROW UP I WILL BEAT ROKU. WATCH ME!'] },
+  { name: 'FARMER', body: '#a07040', hair: '#c0c0c0', zone: [100, 170, 200, 190], lines: ['EAT BEFORE YOU FIGHT. EMPTY STOMACH, EMPTY KI.', 'THE FISH IN THIS LAND ARE HUGE. SO ARE THE APPETITES.'] },
+  { name: 'FIGHTER', body: '#c05030', hair: '#101010', zone: [200, 100, 280, 116], lines: ['GRAVITY 20X? YOU ARE CRAZY. I LIKE IT.', 'SPIRIT SENSE WORKS BEST WHEN YOU STAY CALM.'] },
+  { name: 'DOG', body: '#c89060', hair: '#c89060', zone: [10, 165, 110, 190], dog: true, lines: ['WOOF!', 'WOOF WOOF!'] }];
 const V_TIPS = ['ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
-let vx = 160, vy = 165, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0;
+const V_ELDER = { x: 205, y: 150 };
+let vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null;
+V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
 function toVillage(line) {
-  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vx = 160; vy = 165; vFace = 1; vFlash = 0;
+  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vMenu = null; vx = 140; vy = 178; vFace = 1; vFlash = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
+function vNearPerson() { let best = -1, bd = 26; V_PEOPLE.forEach((p, i) => { const d = Math.hypot(vx - p.x, vy - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
 function vTarget() { // what can I use right now?
-  const near = (b) => Math.abs(vx - b.dx) <= 16 && vy >= b.y1 - 2 && vy <= b.y1 + 18;
-  if (vy <= 116 && Math.abs(vx - V_TRAIN.dx) <= 22) return 'train';
-  if (vy <= 116 && Math.abs(vx - V_ARENA.dx) <= 22) return 'arena';
-  if (Math.abs(vx - V_REST.dx) <= 22 && vy >= V_REST.y1 && vy <= V_REST.y1 + 18) return 'rest';
+  const up = vy <= 116, low = (b) => vy >= b.y1 && vy <= b.y1 + 18 && Math.abs(vx - b.dx) <= 22;
+  if (up && Math.abs(vx - V_TRAIN.dx) <= 22) return 'train';
+  if (up && Math.abs(vx - V_RAMEN.dx) <= 22) return 'ramen';
+  if (up && Math.abs(vx - V_ARENA.dx) <= 22) return 'arena';
+  if (low(V_REST)) return 'rest';
+  if (low(V_HOME)) return 'home';
   if (Math.hypot(vx - V_ELDER.x, vy - V_ELDER.y) < 28) return 'elder';
-  return null;
+  return vNearPerson() >= 0 ? 'person' : null;
+}
+function vSolid(x, y) {
+  const inB = b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1;
+  if (inB(V_REST) || inB(V_HOME)) return true;
+  if (Math.hypot(x - V_ELDER.x, y - V_ELDER.y) < 9) return true;
+  return V_TREES.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function villageUpdate(dt) {
   if (vFlash > 0) vFlash -= dt;
-  if (vTalk) return;
+  const near = vNearPerson();
+  V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
+    if (i === near || vTalk) return;
+    if (p.wait > 0) { p.wait -= dt; return; }
+    const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
+    if (d < 2) { p.wait = 1 + Math.random() * 2.5; p.tx = p.zone[0] + Math.random() * (p.zone[2] - p.zone[0]); p.ty = p.zone[1] + Math.random() * (p.zone[3] - p.zone[1]); p.step = 0; return; }
+    const sp = (p.dog ? 34 : 22) * dt; p.x += dx / d * sp; p.y += dy / d * sp; p.step += dt * 8; if (Math.abs(dx) > 1) p.face = dx > 0 ? 1 : -1;
+  });
+  if (vTalk || vMenu) return;
   const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
   if (dx || dy) {
     const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
-    let nx = Math.max(10, Math.min(310, vx + dx * sp)), ny = Math.max(98, Math.min(192, vy + dy * sp));
-    const solid = (x, y) => x > V_REST.x0 - 4 && x < V_REST.x1 + 4 && y > V_REST.y0 + 14 && y < V_REST.y1;
-    if (Math.hypot(nx - V_ELDER.x, vy - V_ELDER.y) < 10) nx = vx; if (Math.hypot(vx - V_ELDER.x, ny - V_ELDER.y) < 10) ny = vy;
-    if (!solid(nx, vy)) vx = nx; if (!solid(vx, ny)) vy = ny;
+    const nx = Math.max(10, Math.min(310, vx + dx * sp)), ny = Math.max(98, Math.min(192, vy + dy * sp));
+    if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
   } else vWalk = 0;
+}
+function vEat(m) {
+  const t = trainOf();
+  if (t.sessions < m.turns) { sfx('bad'); vMsg = 'NOT ENOUGH TURNS.'; return; }
+  if (m.hp && t.meal) { sfx('bad'); vMsg = 'YOU ARE FULL ALREADY.'; return; }
+  if (!m.hp && t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; return; }
+  t.sessions -= m.turns; t.fatigue = Math.max(0, Math.min(99, t.fatigue + m.str)); if (m.hp) t.meal = m.hp;
+  trSave(); sfx('ok'); vFlash = .35; vMenu = null; vMsg = m.hp ? 'YUM! ' + m.d + '.' : 'AHH. ' + m.d + '.'; say(vMsg);
 }
 function villagePress(k) {
   if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); } return true; }
+  if (vMenu) {
+    if (k === 'up') { vMenu.idx = (vMenu.idx + MEALS.length - 1) % MEALS.length; sfx('move'); }
+    else if (k === 'down') { vMenu.idx = (vMenu.idx + 1) % MEALS.length; sfx('move'); }
+    else if (k === 'back') { vMenu = null; sfx('move'); }
+    else if (k === 'ok') vEat(MEALS[vMenu.idx]);
+    return true;
+  }
   if (k === 'back') { sfx('move'); toTitle(); return true; }
   if (k !== 'ok') return true;
   const t = trainOf(), tg = vTarget();
   if (tg === 'train') { sfx('ok'); toTrain('ROKU: PICK YOUR TRAINING.'); }
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
-  else if (tg === 'rest') {
+  else if (tg === 'ramen') { sfx('ok'); vMenu = { idx: 0 }; }
+  else if (tg === 'home') {
+    if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
+    else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = "MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)"; }
+    say(vTalk);
+  } else if (tg === 'rest') {
     if (t.sessions <= 0) { sfx('bad'); vMsg = 'NO TURNS LEFT. GO FIGHT.'; }
     else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
     else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
+  } else if (tg === 'person') {
+    const p = V_PEOPLE[vNearPerson()]; sfx(p.dog ? 'move' : 'ok'); vTalk = (p.dog ? '' : p.name + ': ') + p.lines[p.line++ % p.lines.length]; say(vTalk);
   }
   return true;
 }
@@ -1486,37 +1538,59 @@ function vBuilding(b, roof, wall, label) {
   ctx.fillStyle = '#90c8ff'; ctx.fillRect(b.x0 + 11, b.y0 + 23, 8, 8); ctx.fillRect(b.x1 - 19, b.y0 + 23, 8, 8);
   textS(label, Math.round((b.x0 + b.x1) / 2 - textW(label) / 2), b.y0 + 4, '#ffffff', 1);
 }
+function vPerson(x, y, body, hair, small, step, face) {
+  const s = small ? .75 : 1, bob = step ? Math.abs(Math.sin(step)) * 1.5 : 0, X = Math.round(x), Y = Math.round(y - bob), r = (a, b, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(X + a * s), Math.round(Y + b * s), Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))); };
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(X - 7, Math.round(y) - 1, 14, 3);
+  r(-5, -14, 10, 13, body); r(-5, -3, 4, 3, '#2a2a3a'); r(1, -3, 4, 3, '#2a2a3a'); r(-4, -22, 8, 8, '#f0d0a0'); r(-5, -24, 10, 4, hair); r(face > 0 ? 1 : -3, -19, 2, 2, '#202040');
+}
+function vDog(x, y, body, step, face) {
+  const X = Math.round(x), Y = Math.round(y), bob = step ? Math.abs(Math.sin(step)) : 0;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(X - 6, Y - 1, 12, 3);
+  ctx.fillStyle = body; ctx.fillRect(X - 6, Y - 8 - bob, 10, 6); ctx.fillRect(X + (face > 0 ? 3 : -8), Y - 12 - bob, 5, 5); ctx.fillRect(X + (face > 0 ? -8 : 5), Y - 10 - bob, 3, 2);
+  ctx.fillStyle = '#402010'; ctx.fillRect(X - 5, Y - 3, 2, 3); ctx.fillRect(X + 1, Y - 3, 2, 3); ctx.fillRect(X + (face > 0 ? 5 : -6), Y - 10 - bob, 1, 1);
+}
+function vTree(t) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(t.x - 8, t.y - 1, 16, 3);
+  ctx.fillStyle = '#6a4a2a'; ctx.fillRect(t.x - 2, t.y - 12, 4, 12);
+  ctx.fillStyle = '#1f5a2a'; ctx.fillRect(t.x - 10, t.y - 26, 20, 16); ctx.fillRect(t.x - 6, t.y - 32, 12, 8);
+  ctx.fillStyle = '#2f7a3a'; ctx.fillRect(t.x - 8, t.y - 24, 8, 6); ctx.fillRect(t.x - 4, t.y - 30, 6, 4);
+}
 function drawVillage() {
   const t = trainOf(), tg = vTarget();
   ctx.fillStyle = '#3a2e6a'; ctx.fillRect(0, 0, W, 34); ctx.fillStyle = '#6a4a8a'; ctx.fillRect(0, 22, W, 12);
   ctx.fillStyle = '#4a3a70'; [[0, 30, 70], [60, 26, 90], [170, 30, 80], [240, 24, 80]].forEach(m => ctx.fillRect(m[0], m[1], m[2], 10));
   ctx.fillStyle = '#2f6b3a'; ctx.fillRect(0, 34, W, H - 34);
   ctx.fillStyle = '#3a7d45'; for (let i = 0; i < 40; i++) ctx.fillRect((i * 53) % 310, 40 + ((i * 37) % 150), 3, 2);
-  ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
+  ctx.fillStyle = '#e8d060'; for (let i = 0; i < 14; i++) ctx.fillRect(12 + ((i * 71) % 296), 124 + ((i * 41) % 66), 2, 2);
+  ctx.fillStyle = '#b89a62'; ctx.fillRect(40, 98, 240, 20); ctx.fillRect(50, 118, 12, 44); ctx.fillRect(258, 118, 12, 44); ctx.fillRect(50, 96, 12, 4); ctx.fillRect(154, 96, 12, 4); ctx.fillRect(258, 96, 12, 4);
   ctx.fillStyle = '#a08850'; for (let i = 0; i < 24; i++) ctx.fillRect(44 + i * 10, 104 + (i % 3) * 5, 3, 2);
-  vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA'); vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE');
-  // the elder
-  const ey = V_ELDER.y, ex = V_ELDER.x;
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3);
-  ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8);
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26);
-  if (tg === 'elder' && Math.floor(time * 3) % 2 === 0) textS('!', ex - 2, ey - 40, '#ffe060', 2);
-  // the hero
-  const bob = vWalk ? Math.abs(Math.sin(vWalk)) * 2 : 0, w = P.set.w, h = P.set.h;
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(vx - 8), Math.round(vy - 1), 16, 3);
-  ctx.save(); ctx.translate(Math.round(vx), Math.round(vy - bob)); ctx.scale(vFace < 0 ? -1 : 1, 1); ctx.drawImage(P.set.img.idle0, -Math.round(w / 2), -h + 2, w, h); ctx.restore();
+  vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_RAMEN, '#c07a20', '#d8c090', 'RAMEN'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA');
+  vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE'); vBuilding(V_HOME, '#7a4a8a', '#d8c8a8', 'YOUR HOME');
+  // smoke from the ramen house
+  ctx.fillStyle = 'rgba(230,230,230,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(176 + Math.sin(u * 6) * 3), Math.round(46 - u * 22), 3, 3); }
+  // everything that stands on the ground, back to front
+  const items = V_TREES.map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
+  items.push({ y: V_ELDER.y, draw: () => { const ex = V_ELDER.x, ey = V_ELDER.y; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3); ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26); } });
+  V_PEOPLE.forEach(p => items.push({ y: p.y, draw: () => p.dog ? vDog(p.x, p.y, p.body, p.step, p.face) : vPerson(p.x, p.y, p.body, p.hair, p.small, p.step, p.face) }));
+  items.push({ y: vy, draw: () => { const bob = vWalk ? Math.abs(Math.sin(vWalk)) * 2 : 0, w = P.set.w, h = P.set.h; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(vx - 8), Math.round(vy - 1), 16, 3); ctx.save(); ctx.translate(Math.round(vx), Math.round(vy - bob)); ctx.scale(vFace < 0 ? -1 : 1, 1); ctx.drawImage(P.set.img.idle0, -Math.round(w / 2), -h + 2, w, h); ctx.restore(); } });
+  items.sort((a, b) => a.y - b.y).forEach(i => i.draw());
+  if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const ax = tg === 'elder' ? V_ELDER.x : V_PEOPLE[vNearPerson()].x, ay = tg === 'elder' ? V_ELDER.y - 40 : V_PEOPLE[vNearPerson()].y - 38; textS('!', Math.round(ax) - 2, Math.round(ay), '#ffe060', 2); }
   // top bar
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 12);
-  textS(hero.name, 6, 3, '#80c8ff', 1); textS('TURNS ' + t.sessions, 110, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
-  const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 190, 3, fc, 1);
+  textS(hero.name, 6, 3, '#80c8ff', 1); textS('TURNS ' + t.sessions, 80, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
+  const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 150, 3, fc, 1);
+  if (t.meal) textS('FED +' + t.meal, 236, 3, '#ffb060', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, W, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, W, 2); ctx.fillRect(0, 238, W, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(318, 196, 2, 44);
   const key = touchMode ? 'OK' : 'Z';
-  if (vTalk) {
+  if (vMenu) {
+    MEALS.forEach((m, i) => { const y = 201 + i * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' 2T' : '') + '  ' + m.short, 16, y, sel ? '#ffe060' : '#ffffff', 1); });
+  } else if (vTalk) {
     wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
   } else if (tg) {
-    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'] }[tg];
+    const p = tg === 'person' ? V_PEOPLE[vNearPerson()] : null;
+    const info = { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', 'STRAIN -40. USES 1 TURN.'], ramen: ['RAMEN HOUSE', 'EAT FOR HP IN THE FIGHT.'], home: ['YOUR HOME', t.mom ? 'MOM ALREADY FED YOU.' : 'MOM COOKS. FREE, STRAIN -10.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], person: [p ? (p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name) : '', ''] }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg, 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));

@@ -14,6 +14,7 @@ const builds = {
   'all ki 0/12/0': { body: 0, ki: 12, focus: 0 },
   'all focus 0/0/12': { body: 0, ki: 0, focus: 12 },
   'body+ki 6/6/0': { body: 6, ki: 6, focus: 0 },
+  'mixed 4/4/4 + feast(60)': { body: 4, ki: 4, focus: 4, meal: 60 },
   'mixed 4/4/4 tired(50)': { body: 4, ki: 4, focus: 4, fatigue: 50 },
   'max 8/8/8': { body: 8, ki: 8, focus: 8 },
 };

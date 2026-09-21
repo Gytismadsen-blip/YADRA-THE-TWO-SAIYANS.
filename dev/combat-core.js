@@ -46,7 +46,7 @@
     st = st || {};
     const n = v => Math.max(0, Math.min(12, v | 0));
     const b = n(st.body), k = n(st.ki), fo = n(st.focus), fat = Math.max(0, Math.min(80, st.fatigue | 0));
-    CFG.player.hp += CFG.train.hpPerBody * b; CFG.strainDecay += CFG.train.decayPerBody * b;
+    CFG.player.hp += CFG.train.hpPerBody * b + Math.max(0, Math.min(80, st.meal | 0)); CFG.strainDecay += CFG.train.decayPerBody * b;
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
