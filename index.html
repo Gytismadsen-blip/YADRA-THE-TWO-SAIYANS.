@@ -307,6 +307,7 @@ const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const W = 320, H = 240;
+let CW = 320, OFFX = 0; // canvas width (427 on computers) and the left margin that centres the 320-wide screens
 const rnd = (a, b) => a + Math.random() * (b - a);
 const lerp = (a, b, u) => a + (b - a) * u;
 const clamp01 = u => Math.max(0, Math.min(1, u));
@@ -315,13 +316,16 @@ const clamp01 = u => Math.max(0, Math.min(1, u));
 function fit() {
   const touch = document.body.classList.contains('touch'), portrait = innerHeight > innerWidth;
   document.body.classList.toggle('portrait', portrait);
+  const nw = touch ? 320 : 427; // computers get a 16:9 view, phones keep 4:3
+  if (cv.width !== nw) { cv.width = nw; ctx.imageSmoothingEnabled = false; }
+  CW = nw; OFFX = Math.round((CW - W) / 2);
   let availH = innerHeight;
   if (touch && portrait) availH = Math.max(140, innerHeight - Math.min(250, Math.round(innerHeight * .36)));
   const availW = touch && !portrait ? Math.max(200, innerWidth - 300) : innerWidth; // leave 150px each side for the buttons
-  const s = Math.min(availW / W, availH / H), k = touch ? s : (s >= 1 ? Math.floor(s) : s);
-  cv.style.width = Math.round(W * k) + 'px'; cv.style.height = Math.round(H * k) + 'px';
+  const k = Math.min(availW / CW, availH / H); // fills the window, pixels stay square
+  cv.style.width = Math.round(CW * k) + 'px'; cv.style.height = Math.round(H * k) + 'px';
 }
-addEventListener('resize', fit); addEventListener('orientationchange', fit); fit();
+addEventListener('resize', fit); addEventListener('orientationchange', fit); addEventListener('fullscreenchange', fit); fit();
 
 // ---------- 5x7 pixel font (no external files) ----------
 const FONT_SRC = {
@@ -978,7 +982,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -986,14 +990,19 @@ addEventListener('keydown', e => {
   e.preventDefault(); if (held[k] !== undefined) held[k] = true; if (e.repeat && k === 'ok') return;
   press(k);
 });
-const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 };
+const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 }, BTN_F = { x: 138, y: 225, w: 52, h: 12 };
 cv.addEventListener('pointerdown', e => {
   initAudio(); cv.focus();
-  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
-  if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice');
+  if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice'); else if (!touchMode && inside(BTN_F)) press('full');
 });
+function toggleFullscreen() {
+  const d = document.documentElement;
+  try { if (document.fullscreenElement) document.exitFullscreen(); else (d.requestFullscreen || d.webkitRequestFullscreen).call(d); } catch (e) {}
+}
 function press(k) {
+  if (k === 'full') { toggleFullscreen(); return; }
   if (k === 'mute') { setMuted(!muted); if (!muted) sfx('ok'); return; }
   if (k === 'voice') { setVoice(!voiceOn); return; }
   if (menuPress(k)) return;
@@ -1110,7 +1119,9 @@ function drawPanel() {
   else if (state.p.strain >= 50) textS('KI COST +25%', 210, 214, '#ffa020', 1);
 }
 function drawToggles() {
-  [[BTN_M, '[M] SND', !muted], [BTN_T, '[T] VOICE', voiceOn]].forEach(([b, label, on]) => {
+  const list = [[BTN_M, '[M] SND', !muted], [BTN_T, '[T] VOICE', voiceOn]];
+  if (!touchMode) list.unshift([BTN_F, '[F] FULL', !!document.fullscreenElement]);
+  list.forEach(([b, label, on]) => {
     ctx.fillStyle = '#1a1a3a'; ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? '#60d080' : '#555570'; ctx.fillRect(b.x, b.y, b.w, 1); ctx.fillRect(b.x, b.y + b.h - 1, b.w, 1); ctx.fillRect(b.x, b.y, 1, b.h); ctx.fillRect(b.x + b.w - 1, b.y, 1, b.h);
     text(label, b.x + 4, b.y + 3, on ? '#80ff80' : '#8080a0', 1);
@@ -1200,7 +1211,23 @@ function update(dt) {
     if (st >= s.dur) { if (s.end) s.end(); si++; if (si >= script.length) finishTurn(); else startStep(); }
   }
 }
+function drawSides() {
+  const flat = mode === 'slots' || mode === 'creator' || mode === 'options' || mode === 'credits' || mode === 'train' || mode === 'tevent';
+  if (flat) { ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, OFFX, H); ctx.fillRect(W, 0, OFFX + 1, H); return; }
+  ctx.save(); ctx.scale(-1, 1); ctx.drawImage(bg, 0, 0); ctx.restore();                         // scenery mirrored to the left
+  ctx.save(); ctx.translate(W * 2, 0); ctx.scale(-1, 1); ctx.drawImage(bg, 0, 0); ctx.restore(); // ...and to the right
+  ctx.fillStyle = '#0d0d24'; ctx.fillRect(-OFFX, 160, OFFX, 80); ctx.fillRect(W, 160, OFFX + 1, 80);
+  ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-OFFX, 160, OFFX, 2); ctx.fillRect(W, 160, OFFX + 1, 2); ctx.fillRect(-OFFX, 238, OFFX, 2); ctx.fillRect(W, 238, OFFX + 1, 2);
+}
 function render() {
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
+  if (mode === 'village') { drawVillage(); ctx.save(); ctx.translate(CW - W, 0); drawToggles(); ctx.restore(); return; } // buttons sit at the right end of the wide box
+  ctx.save(); ctx.translate(OFFX, 0);
+  if (OFFX > 0) drawSides();
+  renderInner();
+  ctx.restore();
+}
+function renderInner() {
   if (menuRender()) { drawToggles(); return; }
   ctx.save();
   if (shake > 0) ctx.translate(Math.round(rnd(-shake, shake)), Math.round(rnd(-shake, shake)));
@@ -1597,9 +1624,9 @@ function villageUpdate(dt) {
       else if (area !== 'village' && area !== 'forest' && vy >= ROOMS[area].h - 2 && Math.abs(vx - ROOMS[area].door) <= 18) exitRoom();
     } else vWalk = 0;
   }
-  if (area === 'village') { camX = Math.round(Math.max(0, Math.min(WORLD.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(WORLD.h - 196, vy - 100))); }
-  else if (area === 'forest') { camX = Math.round(Math.max(0, Math.min(FOREST.w - 320, vx - 160))); camY = Math.round(Math.max(0, Math.min(FOREST.h - 196, vy - 100))); }
-  else { const r = ROOMS[area]; camX = -Math.round((320 - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
+  if (area === 'village') { camX = Math.round(Math.max(0, Math.min(WORLD.w - CW, vx - CW / 2))); camY = Math.round(Math.max(0, Math.min(WORLD.h - 196, vy - 100))); }
+  else if (area === 'forest') { camX = Math.round(Math.max(0, Math.min(FOREST.w - CW, vx - CW / 2))); camY = Math.round(Math.max(0, Math.min(FOREST.h - 196, vy - 100))); }
+  else { const r = ROOMS[area]; camX = -Math.round((CW - r.w) / 2); camY = -Math.round((196 - r.h) / 2); }
 }
 function sleepNow() {
   const t = trainOf(); t.day++; t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 60); t.meal = 0; t.mom = false;
@@ -1699,7 +1726,7 @@ function drawPeopleAndPlayer(extra) {
 }
 function drawRoom() {
   const r = ROOMS[area], rr = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
-  rr(-320, -200, 840, 600, '#0a0a14');
+  rr(-600, -400, 1600, 1000, '#0a0a14');
   rr(0, 40, r.w, r.h - 40, '#8a6a44'); ctx.fillStyle = '#7a5a38'; for (let y = 48; y < r.h; y += 10) ctx.fillRect(0, y, r.w, 1);
   rr(0, 0, r.w, 40, '#5a4a6a'); rr(0, 36, r.w, 4, '#3a2a4a'); rr(0, 0, r.w, 2, '#7a6a8a');
   rr(r.door - 14, r.h - 8, 28, 8, '#6a3a2a'); rr(r.door - 12, r.h - 6, 24, 4, '#8a4a3a');
@@ -1739,26 +1766,26 @@ function drawWorld() {
   vBuilding(V_TRAIN, '#a04040', '#c8b080', 'TRAINING'); vBuilding(V_RAMEN, '#c07a20', '#d8c090', 'RAMEN'); vBuilding(V_ARENA, '#404aa0', '#b8b0a0', 'ARENA');
   vBuilding(V_REST, '#3a8a5a', '#d0c090', 'REST HOUSE'); vBuilding(V_HOME, '#7a4a8a', '#d8c8a8', 'YOUR HOME');
   ctx.fillStyle = 'rgba(230,230,230,.5)'; for (let i = 0; i < 3; i++) { const u = (time * .6 + i / 3) % 1; ctx.fillRect(Math.round(176 + Math.sin(u * 6) * 3), Math.round(46 - u * 22), 3, 3); }
-  const items = V_TREES.filter(tr => tr.x > camX - 20 && tr.x < camX + 340 && tr.y > camY - 10 && tr.y < camY + 240).map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
+  const items = V_TREES.filter(tr => tr.x > camX - 20 && tr.x < camX + CW + 20 && tr.y > camY - 10 && tr.y < camY + 240).map(tr => ({ y: tr.y, draw: () => vTree(tr) }));
   V_SIGNS.forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
   items.push({ y: V_ELDER.y, draw: () => { const ex = V_ELDER.x, ey = V_ELDER.y; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(ex - 8, ey - 1, 16, 3); ctx.fillStyle = '#5a3a80'; ctx.fillRect(ex - 6, ey - 16, 12, 14); ctx.fillStyle = '#f0d0a0'; ctx.fillRect(ex - 4, ey - 24, 8, 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(ex - 4, ey - 19, 8, 6); ctx.fillRect(ex - 5, ey - 26, 10, 3); ctx.fillStyle = '#8a5a30'; ctx.fillRect(ex + 8, ey - 26, 2, 26); } });
   drawPeopleAndPlayer(items);
 }
 function drawVillage() {
   const t = trainOf(), tg = vTarget();
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, 196); ctx.clip(); ctx.translate(-camX, -camY);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, CW, 196); ctx.clip(); ctx.translate(-camX, -camY);
   if (area === 'village') { drawWorld(); if (vFish) drawBobber(); } else if (area === 'forest') drawForest(); else drawRoom();
   if ((tg === 'elder' || tg === 'person') && Math.floor(time * 3) % 2 === 0) { const q = tg === 'elder' ? { x: V_ELDER.x, y: V_ELDER.y - 40 } : (p => ({ x: p.x, y: p.y - 38 }))(curPeople()[vNearPerson()]); textS('!', Math.round(q.x) - 2, Math.round(q.y), '#ffe060', 2); }
   ctx.restore();
-  { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, W, 196); } }
+  { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, CW, 196); } }
   // top bar
-  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 12);
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, CW, 12);
   textS(hero.name, 6, 3, '#80c8ff', 1); textS('DAY ' + t.day + ' ' + timeName(t), 66, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
   const fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, 252, 3, '#ffb060', 1);
   // bottom box
-  ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, W, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, W, 2); ctx.fillRect(0, 238, W, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(318, 196, 2, 44);
+  ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'OK' : 'Z';
   if (vMenu) {
     { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
@@ -1775,8 +1802,8 @@ function drawVillage() {
     textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
   }
   if (vFish) drawFishUi();
-  if (vFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + vFade + ')'; ctx.fillRect(0, 0, W, 196); }
-  if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, W, 196); }
+  if (vFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + vFade + ')'; ctx.fillRect(0, 0, CW, 196); }
+  if (vFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + vFlash + ')'; ctx.fillRect(0, 0, CW, 196); }
 }
 // ================= the forest + mission 1 (the missing sister) =================
 const FOREST = { w: 600, h: 280 };
@@ -1863,12 +1890,12 @@ function drawForest() {
   rr(F_HOLLOW[0], F_HOLLOW[1], F_HOLLOW[2] - F_HOLLOW[0], F_HOLLOW[3] - F_HOLLOW[1], open ? '#3a7a4a' : '#2a5a38'); if (open) { ctx.fillStyle = '#e8d060'; for (let i = 0; i < 14; i++) ctx.fillRect(480 + (i * 23) % 110, 150 + (i * 31) % 110, 2, 2); }
   textS('< VILLAGE', 6, 132, '#c8f0c8', 1);
   F_CLUES.forEach((c, i) => { const f = q.clues[i]; ctx.globalAlpha = f ? .35 : 1; if (c.kind === 'feet') { rr(c.x - 5, c.y - 3, 4, 6, '#5a4a30'); rr(c.x + 2, c.y - 6, 4, 6, '#5a4a30'); } else if (c.kind === 'basket') { rr(c.x - 7, c.y - 6, 14, 8, '#a06a30'); rr(c.x - 6, c.y - 9, 4, 3, '#e8e8e8'); rr(c.x + 2, c.y - 9, 4, 3, '#d05050'); } else { rr(c.x - 5, c.y - 4, 10, 6, '#c04050'); rr(c.x - 2, c.y + 2, 4, 3, '#c04050'); } ctx.globalAlpha = 1; if (!f && vSenseT > 0) { ctx.strokeStyle = 'rgba(120,255,220,.8)'; ctx.strokeRect(c.x - 10, c.y - 12, 20, 18); } });
-  const items = F_TREES.filter(t => t.x > camX - 20 && t.x < camX + 340 && t.y > camY - 10 && t.y < camY + 240).map(t => ({ y: t.y, draw: () => vTree(t) }));
+  const items = F_TREES.filter(t => t.x > camX - 20 && t.x < camX + CW + 20 && t.y > camY - 10 && t.y < camY + 240).map(t => ({ y: t.y, draw: () => vTree(t) }));
   if (!open) items.push({ y: F_BUSH[3], draw: () => { for (let y = F_BUSH[1]; y < F_BUSH[3]; y += 8) { rr(F_BUSH[0] - 4, y, 26, 10, '#1f5a2a'); rr(F_BUSH[0], y + 2, 14, 6, '#2f7a3a'); } } });
   drawPeopleAndPlayer(items);
   if (vSenseT > 0) { const u = 1 - vSenseT / 2.6; ctx.strokeStyle = 'rgba(120,255,220,' + (0.8 * (1 - u)) + ')'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(vx, vy - 12, 10 + u * 90, 0, 6.28); ctx.stroke(); ctx.lineWidth = 1;
     if (vSenseTo) { const a = Math.atan2(vSenseTo.y - vy, vSenseTo.x - vx), ax = vx + Math.cos(a) * 34, ay = vy - 12 + Math.sin(a) * 34; ctx.fillStyle = '#80ffe0'; ctx.beginPath(); ctx.moveTo(ax + Math.cos(a) * 8, ay + Math.sin(a) * 8); ctx.lineTo(ax + Math.cos(a + 2.4) * 6, ay + Math.sin(a + 2.4) * 6); ctx.lineTo(ax + Math.cos(a - 2.4) * 6, ay + Math.sin(a - 2.4) * 6); ctx.fill(); } }
-  ctx.fillStyle = 'rgba(10,50,30,.12)'; ctx.fillRect(camX, camY, 320, 196);
+  ctx.fillStyle = 'rgba(10,50,30,.12)'; ctx.fillRect(camX, camY, CW, 196);
 }
 // ================= fishing -> bag -> grill at the ramen house -> eat (no stacking) =================
 const FISH = {
@@ -1931,7 +1958,7 @@ function drawBobber() {
 function drawFishUi() {
   const f = vFish, t = trainOf(); if (!f) return; const key = touchMode ? 'OK' : 'Z';
   if (f.phase === 'reel') {
-    const X = 50, Y = 40, Wd = 220, F = FISH[f.kind];
+    const X = Math.round((CW - 220) / 2), Y = 40, Wd = 220, F = FISH[f.kind];
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(X - 8, Y - 14, Wd + 16, 62); ctx.fillStyle = '#1a2a4a'; ctx.fillRect(X, Y, Wd, 14);
     ctx.fillStyle = '#40c060'; ctx.fillRect(X + Math.round(f.lo * Wd), Y, Math.round((f.hi - f.lo) * Wd), 14);
     ctx.fillStyle = '#ffe060'; ctx.fillRect(X + Math.round(f.x * Wd) - 2, Y - 4, 4, 22);
@@ -1939,7 +1966,7 @@ function drawFishUi() {
     textS('KEEP THE MARKER IN THE GREEN', X, Y - 11, '#ffffff', 1); textS('LEFT / RIGHT', X, Y + 36, '#a8a8c8', 1);
     if (f.snap > 0) textS('LINE TIGHT!', X + 120, Y + 36, '#ff6060', 1);
   }
-  ctx.fillStyle = '#0d0d24'; ctx.fillRect(2, 198, 316, 40);
+  ctx.fillStyle = '#0d0d24'; ctx.fillRect(2, 198, CW - 4, 40);
   const line = f.phase === 'wait' ? 'WAIT FOR A BITE...' : f.phase === 'bite' ? 'PRESS ' + key + ' NOW!' : 'REEL IT IN!';
   textS(line, 8, 204, f.phase === 'bite' ? '#ffe060' : '#ffffff', 2);
   textS(f.phase === 'wait' ? key + ' TOO EARLY SCARES IT. X: STOP' : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
