@@ -1588,7 +1588,9 @@ function nextMilestone() { // the next real goal, never something already done
 const TIMES = ['NIGHT', 'EVENING', 'AFTERNOON', 'MORNING']; // time slots left today: 3 = morning ... 0 = night
 function timeName(t) { return TIMES[Math.max(0, Math.min(3, t.sessions))]; }
 function trSave() { if (saveData && curSlot >= 0) { saveData.savedAt = Date.now(); writeSlot(curSlot, saveData); } }
+let trainReturn = null;
 function toTrain(line) {
+  if (mode === 'village') trainReturn = { area, x: vx, y: ROOMS[area] ? Math.min(vy + 20, ROOMS[area].h - 24) : vy };
   stopSpeech(); { const tt = trainOf(); if (tt.grav >= (trainHall ? GRAV.length : 4)) tt.grav = 0; } mode = 'train'; trIdx = 0; trEvent = null; trFlash = 0;
   P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
 }
@@ -1614,7 +1616,7 @@ function trainPress(k) {
   }
   let c = trIdx % 2, r = trIdx >> 1;
   if (k === 'left' && c > 0) c--; else if (k === 'right' && c < 1) c++; else if (k === 'up' && r > 0) r--; else if (k === 'down' && r < 2) r++;
-  else if (k === 'back') { sfx('move'); toVillage(); return true; }
+  else if (k === 'back') { sfx('move'); const r = trainReturn; if (r && (r.area === 'village' || r.area === 'forest' || TOWNS[r.area] || ROOMS[r.area])) { toPlace(r.area, r.x, r.y, ''); vInputLock = .6; } else toVillage(); return true; }
   if (k === 'left' || k === 'right' || k === 'up' || k === 'down') { const n = r * 2 + c; if (n !== trIdx) sfx('move'); trIdx = n; return true; }
   if (k !== 'ok') return true;
   const it = TR_ITEMS[trIdx];
