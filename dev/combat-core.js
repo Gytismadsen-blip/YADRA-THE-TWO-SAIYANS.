@@ -9,7 +9,7 @@
     staminaRegen: 3,
     collapseStrain: 60,
     planReadChance: 0.7, lateReadChance: 0.85, memoryDecay: 0.88, minEvidence: 0.9, chargeReadMult: 0.25,
-    train: { hpPerBody: 4, decayPerBody: 0.12, kiPerKi: 4, lanceStrainPerKi: 1.5, readCutPerFocus: 0.05 },
+    train: { hpPerBody: 3, decayPerBody: 0.10, kiPerKi: 4, lanceStrainPerKi: 1.5, readCutPerFocus: 0.04, dmgPerLevel: 0.02 },
     strainTier1: 50, strainTier2: 75, kiPenalty: 1.25, dmgPenalty: 0.8, phantomFail: 0.25,
     moves: {
       strike:  { st: 10, dmg: 12 },
@@ -36,6 +36,7 @@
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
     CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5; CFG.moves.charge.gainKi = 40; CFG.moves.phantom.ki = 20; CFG.moves.phantom.strain = 15;
+    CFG.dmgMul = { strike: 1, blast: 1, lance: 1, phantom: 1 }; CFG.crit = 0; // training makes attacks hit harder
     CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
@@ -51,6 +52,7 @@
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
+    CFG.dmgMul.strike = 1 + CFG.train.dmgPerLevel * b; CFG.dmgMul.blast = CFG.dmgMul.lance = 1 + CFG.train.dmgPerLevel * k; CFG.dmgMul.phantom = 1 + CFG.train.dmgPerLevel * fo; CFG.crit = Math.min(.24, .02 * fo); // Body: Strike, Ki: Blast+Lance, Focus: Phantom Step + critical hits
     if (Array.isArray(st.tech) && st.tech.indexOf('steady') >= 0) CFG.moves.lance.strain = Math.max(20, CFG.moves.lance.strain - 10); // the Steady Spirit technique
     const T = Array.isArray(st.tech) ? st.tech : []; // techniques learned from missions
     if (T.indexOf('breath') >= 0) CFG.moves.charge.gainKi = 50;                                  // Deep Breath: Charge Ki gives more
@@ -195,7 +197,8 @@
     // player action
     let toRoku = 0, phantomFailed = false;
     if (pm === 'strike' || pm === 'blast' || pm === 'lance') {
-      let d = M.dmg * dm;
+      let d = M.dmg * dm * (CFG.dmgMul[pm] || 1);
+      if (CFG.crit > 0 && s.rng() < CFG.crit) { d *= 1.5; ev.notes.push('crit'); }
       if (rokuGuard) d *= 0.5;
       if (evade) d = 0;
       if (strikeHalved || blastHalved) d *= 0.5;
@@ -204,7 +207,7 @@
     } else if (pm === 'phantom') {
       phantomFailed = s.p.strain >= CFG.strainTier2 && s.rng() < CFG.phantomFail;
       if (phantomFailed) ev.notes.push('phantom-failed');
-      else if (!tracking && incoming > 0) { incoming = 0; toRoku += M.dmg * dm; ev.notes.push('dodged'); }
+      else if (!tracking && incoming > 0) { incoming = 0; toRoku += M.dmg * dm * (CFG.dmgMul.phantom || 1); ev.notes.push('dodged'); }
     } else if (pm === 'charge') {
       const gm = ev.notes.includes('read') ? CFG.chargeReadMult : (interruptCharge && incoming > 0 ? .5 : 1); // Roku breaks a charge he saw coming
       s.p.ki = Math.min(CFG.player.kiMax, s.p.ki + CFG.moves.charge.gainKi * gm);

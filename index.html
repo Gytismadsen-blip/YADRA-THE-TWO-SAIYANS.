@@ -60,7 +60,7 @@
     staminaRegen: 3,
     collapseStrain: 60,
     planReadChance: 0.7, lateReadChance: 0.85, memoryDecay: 0.88, minEvidence: 0.9, chargeReadMult: 0.25,
-    train: { hpPerBody: 4, decayPerBody: 0.12, kiPerKi: 4, lanceStrainPerKi: 1.5, readCutPerFocus: 0.05 },
+    train: { hpPerBody: 3, decayPerBody: 0.10, kiPerKi: 4, lanceStrainPerKi: 1.5, readCutPerFocus: 0.04, dmgPerLevel: 0.02 },
     strainTier1: 50, strainTier2: 75, kiPenalty: 1.25, dmgPenalty: 0.8, phantomFail: 0.25,
     moves: {
       strike:  { st: 10, dmg: 12 },
@@ -87,6 +87,7 @@
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
     CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5; CFG.moves.charge.gainKi = 40; CFG.moves.phantom.ki = 20; CFG.moves.phantom.strain = 15;
+    CFG.dmgMul = { strike: 1, blast: 1, lance: 1, phantom: 1 }; CFG.crit = 0; // training makes attacks hit harder
     CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
@@ -102,6 +103,7 @@
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
     const rm = Math.max(0.4, 1 - CFG.train.readCutPerFocus * fo); CFG.lateReadChance *= rm; CFG.planReadChance *= rm;
     CFG.moves.sense.ki = fo >= 3 ? 3 : 5; CFG.noSenseLie = fo >= 5; CFG.startStrain = fat;
+    CFG.dmgMul.strike = 1 + CFG.train.dmgPerLevel * b; CFG.dmgMul.blast = CFG.dmgMul.lance = 1 + CFG.train.dmgPerLevel * k; CFG.dmgMul.phantom = 1 + CFG.train.dmgPerLevel * fo; CFG.crit = Math.min(.24, .02 * fo); // Body: Strike, Ki: Blast+Lance, Focus: Phantom Step + critical hits
     if (Array.isArray(st.tech) && st.tech.indexOf('steady') >= 0) CFG.moves.lance.strain = Math.max(20, CFG.moves.lance.strain - 10); // the Steady Spirit technique
     const T = Array.isArray(st.tech) ? st.tech : []; // techniques learned from missions
     if (T.indexOf('breath') >= 0) CFG.moves.charge.gainKi = 50;                                  // Deep Breath: Charge Ki gives more
@@ -246,7 +248,8 @@
     // player action
     let toRoku = 0, phantomFailed = false;
     if (pm === 'strike' || pm === 'blast' || pm === 'lance') {
-      let d = M.dmg * dm;
+      let d = M.dmg * dm * (CFG.dmgMul[pm] || 1);
+      if (CFG.crit > 0 && s.rng() < CFG.crit) { d *= 1.5; ev.notes.push('crit'); }
       if (rokuGuard) d *= 0.5;
       if (evade) d = 0;
       if (strikeHalved || blastHalved) d *= 0.5;
@@ -255,7 +258,7 @@
     } else if (pm === 'phantom') {
       phantomFailed = s.p.strain >= CFG.strainTier2 && s.rng() < CFG.phantomFail;
       if (phantomFailed) ev.notes.push('phantom-failed');
-      else if (!tracking && incoming > 0) { incoming = 0; toRoku += M.dmg * dm; ev.notes.push('dodged'); }
+      else if (!tracking && incoming > 0) { incoming = 0; toRoku += M.dmg * dm * (CFG.dmgMul.phantom || 1); ev.notes.push('dodged'); }
     } else if (pm === 'charge') {
       const gm = ev.notes.includes('read') ? CFG.chargeReadMult : (interruptCharge && incoming > 0 ? .5 : 1); // Roku breaks a charge he saw coming
       s.p.ki = Math.min(CFG.player.kiMax, s.p.ki + CFG.moves.charge.gainKi * gm);
@@ -474,8 +477,8 @@ const SET_M = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_M), SE
 const PAL_V = { K:'#f0c030', S:'#e0b090', B:'#101010', R:'#30b0ff', D:'#183070', O:'#2050b0', A:'#c0c8d8', Y:'#f0c030' };
 const PAL_V2 = { K:'#ffe860', S:'#e0b090', B:'#101010', R:'#ff3030', D:'#601010', O:'#c02020', A:'#ffb020', Y:'#ffffff' };
 const SET_V = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V), SET_V2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V2);
-const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.2, dmg: 1.15, late: .9, plan: .85, fury: true, voice: 'master', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
-  rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.08, dmg: 1.04, late: .7, plan: .6, fury: true, voice: 'rival', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.4, dmg: 1.2, late: .9, plan: .85, fury: true, voice: 'master', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
+  rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.22, dmg: 1.07, late: .7, plan: .6, fury: true, voice: 'rival', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
   boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
   bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
 let foe = FOES.roku;
@@ -759,7 +762,11 @@ FOES.rival.react = { s75: 'RIVAL: HA! LOOK AT YOU SHAKE!', s75b: 'RIVAL: ONE MOR
 FOES.rival.banter = { hit: ['TOO SLOW!', 'IS THAT ALL?!', 'KNEEL!'], hurt: ['GRR! LUCKY HIT!', 'YOU WILL PAY FOR THAT!'], guard: ['STOP HIDING!'], charge: ["I WON'T LET YOU CHARGE!"], low: ['I WILL NEVER GIVE UP!', 'I AM THE CHAMPION!'], other: ['COME ON!', 'FIGHT ME!'] };
 FOES.rival.info = { strike: ['12 DAMAGE.', 'HE SMASHES A LAZY', 'STRIKE BACK.'], blast: ['18 DAMAGE.', 'HE SENDS BLASTS BACK', 'HARD.'], charge: ['+40 KI.', 'HE RUSHES ANYONE', 'WHO CHARGES.'], sense: ['SEE HIS NEXT', '2 MOVES.', 'HE RAGES AT HALF HP.'] };
 FOES.rival.over = (win) => win ? 'RIVAL: IMPOSSIBLE... I LOST?!' : 'RIVAL: HA! WEAK. COME BACK LATER.';
-const foeInfo = mv => (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name)));
+const foeInfo = mv => { // the first line shows the damage your training really gives
+  const base = (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name))), M = C.CFG.moves[mv];
+  if (M && M.dmg && /^\d+ DAMAGE/.test(base[0])) { const a = base.slice(); a[0] = Math.round(M.dmg * (C.CFG.dmgMul[mv] || 1)) + ' DAMAGE.'; return a; }
+  return base;
+};
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
 
 const params = new URLSearchParams(location.search);
@@ -944,6 +951,7 @@ function buildScript(ev, after, hadKnown) {
     }
   }
 
+  if (notes.includes('crit')) S.push({ dur: .5, msg: 'CRITICAL HIT!', start() { sfx('big'); popup('CRITICAL!', R.x - 30, R.y - 96, '#ffe060', 2); flashScr = .15; } });
   // 3. Roku dies
   if (won) {
     const fled = notes.includes('fled');
@@ -1476,8 +1484,8 @@ function drawSlots() {
       textS(d.best ? 'BEST ' + d.best + ' TURNS' : 'NO WIN YET', x + 10, y + 132, '#c8c8e8', 1);
     } else textS('EMPTY', x + Math.round(w / 2 - textW('EMPTY') / 2), y + 70, '#555577', 1);
   }
-  if (slotConfirm) center('OVERWRITE THIS SLOT?  Z: YES  X: NO', 206, '#ff8080', 1);
-  else center('LEFT/RIGHT + Z     X: BACK', 206, '#8888b0', 1);
+  if (slotConfirm) center(touchMode ? 'TAP AGAIN TO OVERWRITE' : 'OVERWRITE THIS SLOT?  Z: YES  X: NO', 206, '#ff8080', 1);
+  else center(touchMode ? 'TAP A SLOT' : 'LEFT/RIGHT + Z     X: BACK', 206, '#8888b0', 1);
 }
 function drawCreator() {
   flatBg();
@@ -1543,6 +1551,11 @@ function trainOf() {
 function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
 function statCap() { return Math.min(STAT_MAX, 4 + 2 * milestones()); }
 function statCapOf(stat) { return Math.max(statCap(), (trainOf()[stat] | 0)); }
+function derived(t) { // what the training levels give you right now (uses the same numbers as the fight)
+  C.setDifficulty('normal'); C.setStats({ body: t.body, ki: t.ki, focus: t.focus, tech: saveData && saveData.tech });
+  const c = C.CFG, m = c.moves;
+  return { hp: c.player.hp, ki: c.player.kiMax, strike: (m.strike.dmg * c.dmgMul.strike).toFixed(1), blast: (m.blast.dmg * c.dmgMul.blast).toFixed(1), lance: (m.lance.dmg * c.dmgMul.lance).toFixed(1), crit: Math.round(c.crit * 100), read: Math.round((1 - Math.max(0.4, 1 - c.train.readCutPerFocus * t.focus)) * 100) };
+}
 function nextMilestone() { // the next real goal, never something already done
   const q = questOf();
   if (!(saveData && saveData.wins > 0)) return 'BEAT ROKU IN THE ARENA';
@@ -1564,9 +1577,10 @@ function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
-  const before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat; if (lv.g >= 20) saveData.did20x = 1;
+  const d0 = derived(t), before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat; if (lv.g >= 20) saveData.did20x = 1;
   const got = t[stat] - before;
-  trAfter((got ? stat.toUpperCase() + ' +' + got : stat.toUpperCase() + ' IS FULL') + '.  STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
+  const d1 = derived(t), gainTxt = stat === 'body' ? 'HP ' + d1.hp + ' STRIKE ' + d0.strike + '>' + d1.strike : stat === 'ki' ? 'BLAST ' + d0.blast + '>' + d1.blast + ' LANCE ' + d0.lance + '>' + d1.lance : 'CRIT ' + d1.crit + '%';
+  trAfter((got ? stat.toUpperCase() + ' +' + got + '. ' + gainTxt : stat.toUpperCase() + ' IS FULL') + '. STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
 }
 function trainPress(k) {
   const t = trainOf();
@@ -1602,8 +1616,8 @@ function drawTrain() {
   const tremble = (mode === 'tevent' ? 2 : (t.grav >= 3 ? 1 : 0)), jx = tremble ? Math.round((Math.random() - .5) * tremble * 2) : 0;
   if (t.grav >= 2) { ctx.fillStyle = 'rgba(180,30,30,' + (0.06 * t.grav) + ')'; ctx.fillRect(0, 26, W, 130); }
   ctx.drawImage(P.set.img.idle0, Math.round(58 - P.set.w), 128 - P.set.h * 2 + 2 + (lv.g >= 5 ? 3 : 0), P.set.w * 2, P.set.h * 2);
-  const hpN = 170 + C.CFG.train.hpPerBody * t.body, kiN = 100 + C.CFG.train.kiPerKi * t.ki, rdC = Math.round((1 - Math.max(0.4, 1 - C.CFG.train.readCutPerFocus * t.focus)) * 100);
-  [['BODY', t.body, '#e0a040', 'HP ' + hpN], ['KI', t.ki, '#4090ff', 'KI ' + kiN], ['FOCUS', t.focus, '#60e0c0', 'READ -' + rdC + '%']].forEach((r, i) => {
+  const D = derived(t);
+  [['BODY', t.body, '#e0a040', 'HP ' + D.hp + '  STRIKE ' + D.strike], ['KI', t.ki, '#4090ff', 'BLAST ' + D.blast + '  LANCE ' + D.lance], ['FOCUS', t.focus, '#60e0c0', 'READ -' + D.read + '%  CRIT ' + D.crit + '%']].forEach((r, i) => {
     const y = 34 + i * 20;
     textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2], { marks: [statCapOf(r[0].toLowerCase())] }); textS('LV ' + r[1] + '/' + statCapOf(r[0].toLowerCase()), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
   });
@@ -1677,7 +1691,7 @@ V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1]
 Object.keys(ROOM_PEOPLE).forEach(k => ROOM_PEOPLE[k].forEach(p => { p.face = 1; p.step = 0; p.line = 0; }));
 function curPeople() { if (TOWNS[area]) return townPeople(); return area === 'village' ? V_PEOPLE.filter(p => !p.hidden || questOf().step >= 3) : area === 'forest' ? forestPeople() : ROOM_PEOPLE[area]; }
 function toVillage(line) {
-  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vAfterTalk = null; vMenu = null; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
+  stopSpeech(); trainOf(); mode = 'village'; vTalk = ''; vAfterTalk = null; vMenu = null; vChoice = null; vInputLock = .6; area = 'village'; vx = 140; vy = 178; vFace = 1; vFlash = 0; vFade = 0;
   P.set = makeHeroSet(hero); vMsg = line || 'WALK TO A BUILDING.'; if (line) say(line);
 }
 function enterRoom(name) { area = name; vx = ROOMS[name].door; vy = ROOMS[name].h - 16; vFade = 1; vWalk = 0; vMsg = ''; sfx('ok'); }
@@ -1706,6 +1720,7 @@ function vSolid(x, y) {
   return V_TREES.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function villageUpdate(dt) {
+  if (vInputLock > 0) vInputLock -= dt;
   if (vFlash > 0) vFlash -= dt; if (vFade > 0) vFade = Math.max(0, vFade - dt * 3);
   if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
   const near = vNearPerson(), nearP = curPeople()[near];
@@ -1720,7 +1735,7 @@ function villageUpdate(dt) {
     const sp = (p.dog ? 34 : 22) * dt; p.x += dx / d * sp; p.y += dy / d * sp; p.step += dt * 8; if (Math.abs(dx) > 1) p.face = dx > 0 ? 1 : -1;
   });
   fishUpdate(dt);
-  if (!vTalk && !vMenu && !vFish) {
+  if (!vTalk && !vMenu && !vFish && !vChoice) {
     const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
     if (dx || dy) {
       const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
@@ -1765,7 +1780,13 @@ function vEat(m) {
 }
 function villagePress(k) {
   if (vFish) return fishPress(k);
+  if (vInputLock > 0 && k === 'ok') return true; // the tap that closed the intro must not also start a conversation
   if (vTalk) { if (k === 'ok' || k === 'back') { sfx('ok'); vTalk = ''; stopSpeech(); if (vAfterTalk) { const f = vAfterTalk; vAfterTalk = null; f(); } } return true; }
+  if (vChoice) {
+    if (k === 'up' || k === 'down') { vChoice.idx ^= 1; sfx('move'); }
+    else if (k === 'ok' || k === 'back') { const c = vChoice; vChoice = null; if (k === 'ok' && c.idx === 0) c.yes(); else { sfx('move'); vTalk = c.no; say(vTalk); } }
+    return true;
+  }
   if (vMenu) {
     const N = menuItems().length;
     if (k === 'up') { vMenu.idx = (vMenu.idx + N - 1) % N; sfx('move'); }
@@ -2018,7 +2039,9 @@ function drawVillage() {
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'TAP' : 'Z';
-  if (vMenu) {
+  if (vChoice) {
+    vChoice.opts.forEach((o, i) => { const y = 200 + i * 19, sel = i === vChoice.idx; if (sel) textS('>', 6, y, '#ffe060', 2); textS(o, 24, y, sel ? '#ffe060' : '#ffffff', 2); });
+  } else if (vMenu) {
     { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); items.slice(st, st + 3).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + 3 < items.length) textS('v', 306, 225, '#8888b0', 1); }
   } else if (vTalk) {
     wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
@@ -2052,7 +2075,10 @@ for (let i = 0; i < 150; i++) {
   if (x > F_HOLLOW[0] - 20 && y > F_HOLLOW[1] - 10) continue;
   F_TREES.push({ x, y });
 }
-let vSenseT = 0, vSenseTo = null, vBanditT = 0, vAfterTalk = null;
+let vSenseT = 0, vSenseTo = null, vBanditT = 0, vAfterTalk = null, vChoice = null, vInputLock = 0;
+function offerQuest(ask, onYes, noLine) { // the person explains first, then you choose
+  vTalk = ask; say(ask); vAfterTalk = () => { vChoice = { idx: 0, opts: ['I WILL HELP YOU', 'NOT YET'], yes: onYes, no: noLine }; };
+}
 const BOAR_SPOTS = [[180, 140], [330, 200], [420, 200]];
 function boarSpot() { // one boar per day, gone at night or after you hunted it
   const t = trainOf(); if (t.sessions <= 0 || t.huntDay === t.day) return null;
@@ -2097,7 +2123,7 @@ function foeAfter(win) { // called from the fight-over screen after a non-Roku f
 }
 function boyTalk() {
   const q = questOf(), t = trainOf();
-  if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! PLEASE FIND HER! (QUEST STARTED. THE EAST GATE IS OPEN.)'; }
+  if (q.step === 0) { sfx('ok'); offerQuest('BOY: MY BIG SISTER WENT INTO THE FOREST AND DID NOT COME BACK! WILL YOU FIND HER?', () => { q.step = 1; trSave(); sfx('ok'); vTalk = 'BOY: THANK YOU! I OPENED THE EAST GATE FOR YOU. (QUEST STARTED)'; say(vTalk); }, 'BOY: OH... PLEASE COME BACK SOON. I AM SO WORRIED.'); return; }
   else if (q.step < 3) vTalk = 'BOY: PLEASE HURRY! SHE IS STILL IN THE FOREST!';
   else if (q.step === 3) { q.step = 4; t.focus = Math.min(STAT_MAX, t.focus + 2); trSave(); sfx('win'); vFlash = .4; vTalk = 'BOY: YOU FOUND HER! THANK YOU! (QUEST DONE: FOCUS +2, TRAINING CAP +2)'; }
   else { sfx('ok'); vMenu = { idx: 0, kind: 'friend' }; return; }
@@ -2159,17 +2185,18 @@ function fishStart() {
   const t = trainOf();
   if (t.inv.length >= BAG_MAX) { sfx('bad'); vMsg = 'YOUR BAG IS FULL. GRILL A FISH AT THE RAMEN HOUSE.'; return; }
   if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; return; }
-  t.sessions--; trSave(); vFace = 1;
-  vFish = { phase: 'wait', t: 0, wait: 1.3 + Math.random() * 2.2 };
-  vMsg = 'YOU CAST THE LINE...'; sfx('move');
+  const tut = !t.fishTut; if (!tut) t.sessions--; trSave(); vFace = 1; // the first cast is a free practice
+  vFish = { phase: 'wait', t: 0, wait: 1.3 + Math.random() * 2.2, tut };
+  vMsg = tut ? 'PRACTICE CAST. NO TIME LOST IF IT FAILS.' : 'YOU CAST THE LINE...'; sfx('move');
 }
 function fishPick(t) { // rarer fish need luck; a golden fish is guaranteed after 8 casts without one
   if (t.pity >= 8) return 'gold';
+  if (questState('mirakai') === 1 && (t.bigPity | 0) >= 5) return 'big'; // the quest fish is guaranteed after a few tries
   const r = Math.random(), deep = TOWNS[area] && TOWNS[area].deep; return r < (deep ? .08 : .05) ? 'gold' : r < (deep ? .38 : .22) ? 'big' : r < (deep ? .75 : .55) ? 'medium' : 'small';
 }
 function fishUpdate(dt) {
   const f = vFish; if (!f) return; const t = trainOf(); f.t += dt;
-  if (f.phase === 'wait' && f.t >= f.wait) { f.phase = 'bite'; f.t = 0; f.kind = fishPick(t); f.window = Math.min(1.15, .55 + .05 * t.focus); sfx('warn'); }
+  if (f.phase === 'wait' && f.t >= f.wait) { f.phase = 'bite'; f.t = 0; f.kind = f.tut ? 'small' : fishPick(t); f.window = f.tut ? 4 : Math.min(2, 1.2 + .07 * t.focus); sfx('warn'); vFlash = .18; if (touchMode && navigator.vibrate) { try { navigator.vibrate(140); } catch (e) {} } }
   else if (f.phase === 'bite' && f.t >= f.window) fishEnd(false, 'TOO SLOW. THE FISH GOT AWAY.');
   else if (f.phase === 'reel') {
     const F = FISH[f.kind], zone = Math.min(.6, .4 + .015 * t.focus), lo = .5 - zone / 2, hi = .5 + zone / 2;
@@ -2177,7 +2204,8 @@ function fishUpdate(dt) {
     const pull = F.pull * (1 - .045 * Math.min(12, t.body)), hold = (held.right ? 1 : 0) - (held.left ? 1 : 0);
     f.x += (f.dir * pull * .42 + hold * .62) * dt;
     if (f.x < 0 || f.x > 1) { f.x = Math.max(0, Math.min(1, f.x)); f.snap += dt; } else f.snap = Math.max(0, f.snap - dt);
-    const inZone = f.x >= lo && f.x <= hi; f.prog += (inZone ? 1 : -.5) * dt / F.need; f.prog = Math.min(1, f.prog); f.lo = lo; f.hi = hi;
+    if (f.tut) f.snap = 0;
+    const inZone = f.x >= lo && f.x <= hi; f.prog += (inZone ? 1 : -.5) * dt / (f.tut ? F.need * .6 : F.need); f.prog = Math.min(1, f.prog); f.lo = lo; f.hi = hi;
     if (f.prog < 0) f.prog = 0;
     if (f.t > 24) fishEnd(false, 'YOU TOOK TOO LONG. IT ESCAPED.');
     else if (f.snap > .6) fishEnd(false, 'THE LINE SNAPPED!');
@@ -2186,10 +2214,12 @@ function fishUpdate(dt) {
 }
 function fishEnd(ok, msg) {
   const f = vFish, t = trainOf();
+  if (!f.tut) t.bigPity = (ok && f.kind === 'big') ? 0 : (t.bigPity | 0) + 1;
   if (ok) {
+    if (f.tut) { t.fishTut = 1; t.sessions = Math.max(0, t.sessions - 1); }
     t.inv.push(f.kind); t.pity = f.kind === 'gold' ? 0 : t.pity + 1; trSave(); sfx(f.kind === 'gold' ? 'win' : 'ok'); vFlash = .3;
     vMsg = 'YOU CAUGHT A ' + FISH[f.kind].n + '! (BAG ' + t.inv.length + '/' + BAG_MAX + ')'; say(vMsg);
-  } else { t.pity++; trSave(); sfx('lose'); vMsg = msg; }
+  } else { if (!f.tut) t.pity++; trSave(); sfx('lose'); vMsg = msg + (f.tut ? ' (PRACTICE: NO TIME LOST)' : ''); }
   vFish = null;
 }
 function fishPress(k) {
@@ -2213,13 +2243,13 @@ function drawFishUi() {
     ctx.fillStyle = '#40c060'; ctx.fillRect(X + Math.round(f.lo * Wd), Y, Math.round((f.hi - f.lo) * Wd), 14);
     ctx.fillStyle = '#ffe060'; ctx.fillRect(X + Math.round(f.x * Wd) - 2, Y - 4, 4, 22);
     ctx.fillStyle = '#2a2a3a'; ctx.fillRect(X, Y + 26, Wd, 6); ctx.fillStyle = '#60d0ff'; ctx.fillRect(X, Y + 26, Math.round(Wd * f.prog), 6);
-    textS('KEEP THE MARKER IN THE GREEN', X, Y - 11, '#ffffff', 1); textS('LEFT / RIGHT', X, Y + 36, '#a8a8c8', 1);
+    textS('KEEP THE MARKER IN THE GREEN', X, Y - 11, '#ffffff', 1); textS(touchMode ? 'SWIPE LEFT OR RIGHT' : 'LEFT / RIGHT', X, Y + 36, '#a8a8c8', 1);
     if (f.snap > 0) textS('LINE TIGHT!', X + 120, Y + 36, '#ff6060', 1);
   }
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(2, 198, CW - 4, 40);
   const line = f.phase === 'wait' ? 'WAIT FOR A BITE...' : f.phase === 'bite' ? 'PRESS ' + key + ' NOW!' : 'REEL IT IN!';
   textS(line, 8, 204, f.phase === 'bite' ? '#ffe060' : '#ffffff', 2);
-  textS(f.phase === 'wait' ? key + ' TOO EARLY SCARES IT. X: STOP' : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
+  textS(f.phase === 'wait' ? (touchMode ? 'TAP WHEN IT BITES. NOT BEFORE.' : key + ' TOO EARLY SCARES IT. X: STOP') : 'BAG ' + t.inv.length + '/' + BAG_MAX + '   FOCUS GIVES TIME', 8, 224, '#a8a8c8', 1);
 }
 function fishItems() { return trainOf().inv.map((k, i) => ({ fish: k, idx: i, n: FISH[k].n, short: '+' + FISH[k].hp + ' HP  STR ' + (FISH[k].str > 0 ? '+' : '') + FISH[k].str })); }
 function menuItems() { if (vMenu && vMenu.kind === 'friend') return friendItems(); return ((TOWNS[area] && TOWNS[area].meals) || MEALS).concat(q2Of().step >= 2 && !TOWNS[area] ? [GOLDEN] : []).concat(fishItems()); }
@@ -2430,10 +2460,18 @@ function fastTravel(key) {
 const MAP_NODES = { village: { n: 'SORYA VILLAGE', x: 58, y: 44 }, tavora: { n: 'TAVORA', x: 58, y: 94 }, keshin: { n: 'KESHIN', x: 58, y: 144 }, mirakai: { n: 'MIRAKAI', x: 196, y: 44 }, lumora: { n: 'LUMORA', x: 196, y: 94 }, oraya: { n: 'ORAYA CITY', x: 130, y: 178 } };
 const MAP_EDGES = [['village', 'tavora'], ['tavora', 'keshin'], ['keshin', 'oraya'], ['village', 'mirakai'], ['mirakai', 'lumora'], ['lumora', 'oraya']];
 function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
+function mapYou() { // your real position: in a town, or somewhere along the road between two towns
+  const c = n => ({ x: MAP_NODES[n].x + 34, y: MAP_NODES[n].y });
+  if (area === 'village') return c('village'); if (TOWNS[area] && TOWNS[area].kind === 'town') return c(area);
+  const lerp = (a, b, u) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u });
+  if (area === 'forest') return lerp(c('village'), c('tavora'), .25);
+  if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return lerp(c(a), c(d[2]), (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
+  return c('village');
+}
 function mapVisited() { trainOf(); return Object.assign({ village: 1 }, saveData.visited || {}); }
 function toggleMap() {
   if (mode === 'map') { mode = 'village'; sfx('move'); return; }
-  if (mode === 'village' && !vFish && !vTalk && !vMenu && !ROOMS[area]) { mode = 'map'; mapSel = mapCurrent(); mapMsg = ''; sfx('ok'); }
+  if (mode === 'village' && !vFish && !vTalk && !vMenu && !vChoice && !ROOMS[area]) { mode = 'map'; mapSel = mapCurrent(); mapMsg = ''; sfx('ok'); }
 }
 let mapMsg = '';
 function mapPress(k) {
@@ -2460,12 +2498,12 @@ function drawMap() {
     ctx.fillStyle = seen ? '#1e1e48' : '#14142c'; ctx.fillRect(x, n.y - 9, w, 18);
     ctx.fillStyle = sel ? '#ffe060' : seen ? '#60a0e0' : '#444466'; ctx.fillRect(x, n.y - 9, w, 2); ctx.fillRect(x, n.y + 7, w, 2); ctx.fillRect(x, n.y - 9, 2, 18); ctx.fillRect(x + w - 2, n.y - 9, 2, 18);
     textS(label, Math.round(n.x + 34 - textW(label) / 2), n.y - 3, seen ? '#ffffff' : '#666688', 1);
-    if (k === cur && Math.floor(time * 3) % 2 === 0) textS('YOU', Math.round(n.x + 34 - 9), n.y - 20, '#80ff80', 1);
   });
+  { const yp = mapYou(); if (Math.floor(time * 3) % 2 === 0) { ctx.fillStyle = '#000'; ctx.fillRect(yp.x - 4, yp.y - 4, 9, 9); ctx.fillStyle = '#80ff80'; ctx.fillRect(yp.x - 3, yp.y - 3, 7, 7); } textS('YOU', Math.round(yp.x - 9), Math.round(yp.y - 15), '#80ff80', 1); }
   const t = trainOf(), sel = MAP_NODES[mapSel];
   textS(sel ? sel.n : '', 10, 206, '#ffe060', 1);
   textS(mapMsg || (mapSel === cur ? 'YOU ARE HERE.' : (touchMode ? 'TAP' : 'Z') + ': TRAVEL (1 TIME SLOT)  ' + (t.sessions ? '' : 'NIGHT!')), 10, 217, mapMsg ? '#ff8080' : '#c8c8e8', 1);
-  textS('ARROWS  X: BACK', 10, 228, '#8888b0', 1);
+  textS(touchMode ? 'TAP A PLACE' : 'ARROWS  X: BACK', 10, 228, '#8888b0', 1);
 }
 // ---------- drawing a town or a road ----------
 function drawTown() {
@@ -2509,7 +2547,7 @@ function activeQuestLine() { const ids = Object.keys(QUESTS); for (let i = 0; i 
 function techCount() { return (saveData && saveData.tech ? saveData.tech.length : 0); }
 function questTalk(p) {
   const id = p.quest, Q = QUESTS[id], t = trainOf(); saveData.quests = saveData.quests || {}; const st = saveData.quests[id] | 0;
-  if (st === 0) { saveData.quests[id] = 1; trSave(); sfx('ok'); vTalk = Q.ask; }
+  if (st === 0) { sfx('ok'); offerQuest(Q.ask, () => { saveData.quests[id] = 1; trSave(); sfx('ok'); vTalk = 'GOOD. I COUNT ON YOU. (QUEST STARTED)'; say(vTalk); }, p.name + ': COME BACK WHEN YOU ARE READY.'); return; }
   else if (st === 1) {
     if (questReady(id)) {
       if (Q.item) t.inv.splice(t.inv.indexOf(Q.item), 1);
@@ -2518,7 +2556,9 @@ function questTalk(p) {
   } else { sfx('ok'); vTalk = p.name + ': ' + p.lines[p.line++ % p.lines.length]; }
   say(vTalk);
 }
-function qMark(p) { if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
+function qMark(p) {
+  if (p.role === 'boy') { const st = questOf().step; if (st === 0 || st === 3) textS(st === 3 ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 30, st === 3 ? '#80ff80' : '#ffe060', 2); return; }
+  if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
 function menuRender() {
   if (mode === 'title') drawTitleScreen(); else if (mode === 'slots') drawSlots(); else if (mode === 'creator') drawCreator();
   else if (mode === 'options') drawOptions(); else if (mode === 'credits') drawCredits(); else if (mode === 'train' || mode === 'tevent') drawTrain(); else if (mode === 'village') drawVillage(); else return false;
@@ -2627,7 +2667,7 @@ function drawBackBtn() {
   let jid = null, ox = 0, oy = 0;
   const clearHeld = () => { held.left = held.right = held.up = held.down = false; };
   const canvasXY = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - OFFX, y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
-  const worldMode = () => mode === 'village' && !vTalk && !vMenu;
+  const worldMode = () => mode === 'village' && !vTalk && !vMenu && !vChoice;
   // tap a menu row: first tap selects it, tapping the same row again confirms
   function tapAt(c) {
     if (!c.inside) return;
@@ -2649,6 +2689,7 @@ function drawBackBtn() {
       for (let i = 0; i < MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
     }
     else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
+    else if (mode === 'village' && vChoice) { for (let i = 0; i < 2; i++) if (inR(2, 198 + i * 19, CW - 4, 19)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
     else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
   }
   addEventListener('pointerdown', e => {
