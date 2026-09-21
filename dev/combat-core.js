@@ -36,6 +36,7 @@
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
     CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5;
+    CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
   //   body  -> more life, Strain wears off faster
@@ -59,6 +60,7 @@
     R.hp = Math.round(R.hp * (f.hp || 1)); R.rush = Math.round(R.rush * (f.dmg || 1)); R.blast = Math.round(R.blast * (f.dmg || 1));
     R.phase2At = f.fury === false ? -1 : Math.floor(R.hp / 2);
     if (f.late != null) CFG.lateReadChance = f.late; if (f.plan != null) CFG.planReadChance = f.plan;
+    if (f.ai) CFG.ai = Object.assign({}, CFG.ai, f.ai);
   }
 
   function mulberry32(a) {
@@ -123,8 +125,10 @@
       const p1 = predictNext(s), p2 = p1 ? predictNext(s, [p1.move]) : null; // the move after the next one
       if (p2 && s.rng() < CFG.planReadChance) return { type: 'read', target: p2.move, late: false };
     }
+    const A = CFG.ai;
+    if (A.chargeHunter && s.p.last === 'charge' && s.rng() < A.chargeHunter) return { type: 'rush' }; // he jumps on a charge
     const x = s.rng();
-    return { type: x < 0.4 ? 'rush' : x < 0.75 ? 'blast' : 'guard' };
+    return { type: x < A.rush ? 'rush' : x < A.rush + A.blast ? 'blast' : 'guard' };
   }
 
   function legalMoves(s) {
@@ -240,6 +244,7 @@
     s.log.push(ev);
     if (s.r.hp <= 0) { s.over = 'win'; if (s.p.hp <= 0) s.p.hp = 1; } // if both fall in the same turn, Gytis barely stands
     else if (s.p.hp <= 0) s.over = 'lose';
+    else if (CFG.ai.flee && s.r.hp <= CFG.ai.flee * CFG.roku.hp && s.rng() < .4) { s.over = 'win'; ev.notes.push('fled'); } // a nervous enemy gives up
     else if (s.t >= 60) s.over = 'timeout';
     return s;
   }

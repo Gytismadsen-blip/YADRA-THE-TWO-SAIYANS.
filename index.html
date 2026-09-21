@@ -80,6 +80,7 @@
     // reset everything training can change
     CFG.player.kiMax = 100; CFG.player.ki = 100; CFG.strainDecay = 3; CFG.startStrain = 0; CFG.noSenseLie = false;
     CFG.moves.lance.strain = 45; CFG.moves.sense.ki = 5;
+    CFG.ai = { rush: .4, blast: .35, chargeHunter: 0, flee: 0 }; // enemy habits: rush/blast weights (guard = the rest), punishes Charge Ki, runs away at low HP
   }
   // Training: three trainable things. Call setDifficulty first, then setStats (it adds on top).
   //   body  -> more life, Strain wears off faster
@@ -103,6 +104,7 @@
     R.hp = Math.round(R.hp * (f.hp || 1)); R.rush = Math.round(R.rush * (f.dmg || 1)); R.blast = Math.round(R.blast * (f.dmg || 1));
     R.phase2At = f.fury === false ? -1 : Math.floor(R.hp / 2);
     if (f.late != null) CFG.lateReadChance = f.late; if (f.plan != null) CFG.planReadChance = f.plan;
+    if (f.ai) CFG.ai = Object.assign({}, CFG.ai, f.ai);
   }
 
   function mulberry32(a) {
@@ -167,8 +169,10 @@
       const p1 = predictNext(s), p2 = p1 ? predictNext(s, [p1.move]) : null; // the move after the next one
       if (p2 && s.rng() < CFG.planReadChance) return { type: 'read', target: p2.move, late: false };
     }
+    const A = CFG.ai;
+    if (A.chargeHunter && s.p.last === 'charge' && s.rng() < A.chargeHunter) return { type: 'rush' }; // he jumps on a charge
     const x = s.rng();
-    return { type: x < 0.4 ? 'rush' : x < 0.75 ? 'blast' : 'guard' };
+    return { type: x < A.rush ? 'rush' : x < A.rush + A.blast ? 'blast' : 'guard' };
   }
 
   function legalMoves(s) {
@@ -284,6 +288,7 @@
     s.log.push(ev);
     if (s.r.hp <= 0) { s.over = 'win'; if (s.p.hp <= 0) s.p.hp = 1; } // if both fall in the same turn, Gytis barely stands
     else if (s.p.hp <= 0) s.over = 'lose';
+    else if (CFG.ai.flee && s.r.hp <= CFG.ai.flee * CFG.roku.hp && s.rng() < .4) { s.over = 'win'; ev.notes.push('fled'); } // a nervous enemy gives up
     else if (s.t >= 60) s.over = 'timeout';
     return s;
   }
@@ -427,7 +432,7 @@ const SET_R = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R);
 const SET_R2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R2);
 const PAL_B = { K:'#2a2a3a', S:'#d8a878', B:'#101010', R:'#8a30b0', D:'#402060', O:'#5a3a80', A:'#404050', Y:'#a0a0b0' };
 const SET_B = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_B);
-const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1, late: .85, plan: .7, fury: false } };
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
 let foe = FOES.roku;
 
 // ---------- background (Yardrat dusk), drawn once ----------
@@ -579,13 +584,16 @@ function pickVoice() {
          v.find(x => /aria|guy|jenny|zira|david|mark/i.test(x.name)) || v[0] || null;
 }
 function stopSpeech() { speakId++; speaking = false; if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {} }
-const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 } };
+const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 }, bandit: { pitch: 1.05, rate: 1.22 } };
 function say(text, opt) {
   if (!voiceOn || !window.speechSynthesis) return;
   stopSpeech();
   let who = (opt && opt.who) || 'narrator', t = String(text);
+  if (foe.tr && inFight() && foe.tr[t]) t = foe.tr[t];
   if (/^ROKU:/i.test(t)) { who = 'roku'; t = t.replace(/^ROKU:\s*/i, ''); }
+  else if (foe.id !== 'roku' && inFight() && t.toUpperCase().indexOf(foe.name + ':') === 0) { who = 'roku'; t = t.slice(foe.name.length + 1).trim(); }
   else if (t.toUpperCase().indexOf(hero.name + ':') === 0) { who = 'gytis'; t = t.slice(hero.name.length + 1).trim(); }
+  if (who === 'roku' && foe.voice && inFight()) who = foe.voice;
   t = t.toLowerCase().replace(/\bki\b/g, 'kee').replace(/%/g, ' percent');
   if (foe.id !== 'roku' && (mode === 'anim' || mode === 'menu' || mode === 'over' || mode === 'intro')) t = t.replace(/\broku\b/g, foe.name.toLowerCase());
   try {
@@ -627,6 +635,41 @@ const READ_LINE = {
   guard:   "HIDING AGAIN? I'LL BREAK THROUGH.",
   sense:   'STOP STARING AT ME. FIGHT!',
 };
+// ---------- enemy profiles: every enemy has its own voice, feelings, tactics and words ----------
+const inFight = () => mode === 'anim' || mode === 'menu' || mode === 'over' || mode === 'intro';
+const READ_B = { lance: 'THAT AGAIN? NOT THIS TIME!', strike: 'I KNOW YOUR PUNCH NOW, KID!', blast: 'THROW ANOTHER BLAST. SEE WHAT HAPPENS!', phantom: 'I SEE YOU DANCING! HA!', charge: 'CHARGING? I WILL SMASH YOU!', guard: 'HIDING? COME OUT!', sense: 'STOP STARING AT ME!' };
+FOES.bandit.tr = {
+  'ROKU TRIED TO READ YOU. YOU CHANGED IT UP!': 'THE BANDIT GUESSED WRONG. HE LOOKS SCARED!',
+  'ROKU CHANGED HIS PLAN AFTER READING YOU!': 'THE BANDIT PANICS AND SWITCHES TACTICS!',
+  'ROKU IS DOWN!': 'THE BANDIT CANNOT STAND ANY MORE!',
+  'ROKU FLEES!': 'THE BANDIT PANICS AND RUNS AWAY!',
+  'ROKU GUARDS!': 'THE BANDIT COVERS UP, SHAKING!',
+  'ROKU COUNTERS YOUR STRIKE!': 'THE BANDIT SWINGS BACK WILDLY!',
+  'ROKU SENDS YOUR BLAST BACK!': 'THE BANDIT SLAPS YOUR BLAST AWAY!',
+  'ROKU FIRES A BLAST!': 'THE BANDIT FIRES A SLOPPY BLAST!',
+  'ROKU TRACKS YOUR STEP!': 'THE BANDIT SPOTS YOU!',
+  'ROKU BREAKS YOUR CHARGE!': 'THE BANDIT SMASHES YOUR CHARGE!',
+  'ROKU BREAKS YOUR GUARD!': 'THE BANDIT BATTERS YOUR GUARD!',
+  'ROKU ATTACKS!': 'THE BANDIT ATTACKS!',
+  'ROKU RUSHES IN!': 'THE BANDIT CHARGES AT YOU!',
+  'Come on!': 'Back off!', 'Ki Blast!': 'Eat this!', 'Here I come!': 'You are dead, kid!' };
+Object.keys(READ_LINE).forEach(k => { FOES.bandit.tr['ROKU: ' + READ_LINE[k]] = 'BANDIT: ' + READ_B[k]; });
+FOES.bandit.react = {
+  s75: 'BANDIT: HAH! YOU ARE FALLING APART, KID!', s75b: 'BANDIT: ONE MORE HIT AND YOU DROP!', s50: 'BANDIT: YOU ARE GETTING SLOPPY!',
+  lance: 'BANDIT: WHAT WAS THAT?! NOT FAIR!', dodge: 'BANDIT: WHERE DID HE GO?!', sense: 'BANDIT: STOP LOOKING AT ME LIKE THAT!',
+  kilow: 'BANDIT: NO KI? EASY PICKINGS!', hplow: 'BANDIT: YOU ARE DONE, {N}!', rlow: "BANDIT: THIS WASN'T SUPPOSED TO HAPPEN!" };
+FOES.bandit.banter = {
+  hit: ['TOO SLOW, KID!', 'GIVE UP THE GIRL!', 'HA! TAKE THAT!'], hurt: ['OW! YOU WILL PAY FOR THAT!', 'THAT HURT!'], guard: ['STOP HIDING!', 'COME OUT, COWARD!'],
+  charge: ['NO CHARGING! I WILL BREAK IT!', "YOU CAN'T CHARGE FOREVER!"], low: ['WAIT, WAIT, WAIT!', "THIS ISN'T WORTH IT!", 'THE BOSS DID NOT PAY ME FOR THIS!'], other: ['I AM NOT AFRAID OF YOU!', 'THE BOSS WILL HEAR ABOUT THIS!'] };
+FOES.bandit.info = {
+  strike: ['12 DAMAGE.', 'HE HARDLY EVER', 'GUARDS.'], blast: ['18 DAMAGE.', 'HE CAN STILL READ', 'A REPEATED BLAST.'],
+  charge: ['+40 KI.', 'HE LOVES TO RUSH', 'AND BREAK IT.'], sense: ["SEE HIS NEXT", '2 MOVES.', 'COSTS A TURN.'] };
+FOES.bandit.over = function (win, st) {
+  const last = st.log[st.log.length - 1], fled = last && last.notes.includes('fled');
+  if (win) return fled ? 'BANDIT: I QUIT! THE BOSS CAN DO IT HIMSELF!' : st.p.hp <= 25 ? 'BANDIT: HA! LUCKY... I ALMOST HAD YOU!' : 'BANDIT: OKAY! OKAY! YOU WIN!';
+  return st.p.strain >= 50 ? 'BANDIT: LOOK AT YOU. TOO WEAK TO STAND!' : 'BANDIT: GO HOME, KID. MORE WILL COME.';
+};
+const foeInfo = mv => (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name)));
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
 
 const params = new URLSearchParams(location.search);
@@ -665,7 +708,7 @@ function buildIntro() {
   if (n === 'GYTIS') INTRO.push('ROKU: GYTIS? THE ONE WHO MADE THIS PLACE? WE WILL SEE.');
   INTRO.push("ROKU: LET'S SEE WHAT ELDER SOBA REALLY TAUGHT YOU.", 'TIP: WATCH YOUR STRAIN. TOO MUCH POWER BREAKS YOUR BODY.', 'TIP: ROKU LEARNS YOUR HABITS. DO NOT REPEAT YOURSELF.');
 }
-function setMsg(m) { msg = foe.id === 'roku' ? m : String(m).replace(/ROKU/g, foe.name); msgT = 0; }
+function setMsg(m) { m = String(m); msg = foe.id === 'roku' ? m : ((foe.tr && foe.tr[m]) || m.replace(/ROKU/g, foe.name)); msgT = 0; }
 
 // ---------- effects ----------
 function burst(x, y, col, n, sp) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: rnd(-sp, sp), vy: rnd(-sp, sp * .3), life: rnd(.3, .7), t: 0, col, sz: (rnd(2, 4)) | 0 }); }
@@ -813,8 +856,9 @@ function buildScript(ev, after, hadKnown) {
 
   // 3. Roku dies
   if (won) {
-    S.push({ dur: 1.1, msg: 'ROKU IS DOWN!', start() { sfx('big'); burst(R.x, R.y - 30, '#ffffff', 30, 140); shake = 8; flashScr = .4; },
-      upd(u) { R.alpha = 1 - u * .6; R.ox = u * 18; R.oy = u * 8; } });
+    const fled = notes.includes('fled');
+    S.push({ dur: fled ? 1.4 : 1.1, msg: fled ? 'ROKU FLEES!' : 'ROKU IS DOWN!', start() { if (fled) sfx('ok'); else { sfx('big'); burst(R.x, R.y - 30, '#ffffff', 30, 140); shake = 8; flashScr = .4; } },
+      upd(u) { if (fled) { R.alpha = 1 - u; R.ox = u * 150; } else { R.alpha = 1 - u * .6; R.ox = u * 18; R.oy = u * 8; } } });
     S.push({ dur: .01, end() { dmgP(); } });
   } else {
     // 4. Roku action
@@ -883,7 +927,7 @@ function pickReaction(ev) {
     ['rlow', r.hp <= C.CFG.roku.hp * .3, "ROKU: NOT YET! I'M NOT DONE!"],
   ];
   for (const [k, cond, text] of list) {
-    if (cond && !reacted[k]) { reacted[k] = t + 1; lastReactT = t; return { who: 'roku', text }; }
+    if (cond && !reacted[k]) { reacted[k] = t + 1; lastReactT = t; return { who: 'roku', text: (foe.react && foe.react[k]) ? foe.react[k].replace('{N}', hero.name) : text }; }
   }
   return null;
 }
@@ -898,6 +942,11 @@ function pickBanter(ev) {
   if (state.over || state.t - lastBanterT < 2 || Math.random() >= .45) return null;
   const n = hero.name;
   let pool;
+  if (foe.banter) { // this enemy has its own things to say
+    const B = foe.banter;
+    pool = state.r.hp <= C.CFG.roku.hp * .3 ? B.low : (ev.toPlayer > 0 && ev.roku.type !== 'guard') ? B.hit : ev.toRoku >= 18 ? B.hurt : ev.player === 'guard' ? B.guard : ev.player === 'charge' ? B.charge : B.other;
+    lastBanterT = state.t; return pool[(Math.random() * pool.length) | 0];
+  }
   if (ev.toPlayer > 0 && ev.roku.type !== 'guard') pool = ['TOO SLOW!', 'IS THAT ALL YOU HAVE?', 'FEEL THAT?', 'KEEP UP, ' + n + '!'];
   else if (ev.toRoku >= 18) pool = ['NOT BAD...', 'HEH. YOU HIT HARD.', 'THAT ONE HURT.'];
   else if (ev.player === 'guard') pool = ["HIDING WON'T SAVE YOU!", 'COME OUT AND FIGHT!'];
@@ -1055,7 +1104,7 @@ function drawPanel() {
   if (M.st) costs.push('STA' + M.st);
   if (M.strain) costs.push('STR+' + M.strain);
   textS(costs.length ? costs.join(' ') : 'FREE', 210, 176, '#a0c8ff', 1);
-  INFO[mv].forEach((l, i) => textS(l, 210, 187 + i * 9, '#d8d8e8', 1));
+  foeInfo(mv).forEach((l, i) => textS(l, 210, 187 + i * 9, '#d8d8e8', 1));
   if (curInfoMsg) textS(curInfoMsg, 210, 214, '#ff8080', 1);
   else if (state.p.strain >= 75) textS('WEAK! -20% DMG', 210, 214, '#ff5050', 1);
   else if (state.p.strain >= 50) textS('KI COST +25%', 210, 214, '#ffa020', 1);
@@ -1070,7 +1119,7 @@ function drawToggles() {
 let overTxt = '', capMsg = '';
 // Roku comments on HOW the fight went (HP left, collapses, length, strain, favourite move). Max 2 lines on screen (~44 chars).
 function overLine() {
-  if (foe.id !== 'roku') return foe.name + ': ' + (over === 'win' ? 'OKAY! OKAY! I GIVE UP!' : 'HA! GO HOME, KID.');
+  if (foe.id !== 'roku') return foe.over(over === 'win', state);
   const p = state.p, hp = Math.round(p.hp), frac = p.hp / C.CFG.player.hp, rfrac = state.r.hp / C.CFG.roku.hp, turns = state.t;
   const cnt = {}; state.hist.forEach(m => { if (m !== 'collapse') cnt[m] = (cnt[m] || 0) + 1; });
   const collapses = state.hist.filter(m => m === 'collapse').length;
@@ -1201,7 +1250,8 @@ function recordFight(win) { // progress is saved after every fight
   saveData.fights = (saveData.fights || 0) + 1;
   if (win) { saveData.wins = (saveData.wins || 0) + 1; if (saveData.wins === 1) capMsg = 'TRAINING CAP +2!'; saveData.best = saveData.best ? Math.min(saveData.best, state.t) : state.t; }
   else saveData.losses = (saveData.losses || 0) + 1;
-  const t = trainOf(); t.sessions = 3; t.fatigue = Math.max(0, t.fatigue - 15); t.meal = 0; t.mom = false; t.day++;
+  const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.meal = 0; // a fight with Roku takes a slice of the day
+ 
   saveData.savedAt = Date.now();
   return writeSlot(curSlot, saveData);
 }
@@ -1780,9 +1830,9 @@ function boyTalk() {
   say(vTalk);
 }
 function questLine() {
-  const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : "QUEST: FIND THE BOY'S SISTER. GO EAST.";
-  if (q.step === 3) return 'QUEST: TELL THE BOY THE GOOD NEWS.';
-  if (q2Of().step === 1) return 'QUEST: BRING THE COOK A GOLD FISH.'; return '';
+  const q = questOf(); if (q.step === 1 || q.step === 2) return area === 'forest' ? 'QUEST: FIND HER. CLUES ' + cluesFound(q) + '/3' : 'QUEST: FIND THE SISTER. EAST.';
+  if (q.step === 3) return 'QUEST: TELL THE BOY.';
+  if (q2Of().step === 1) return 'QUEST: GOLD FISH FOR COOK'; return '';
 }
 function forestSolid(x, y) {
   if (cluesFound(questOf()) < 3 && x > F_BUSH[0] && x < F_BUSH[2] && y > F_BUSH[1] && y < F_BUSH[3]) return true;
@@ -1906,7 +1956,7 @@ function cookTalk() {
   const q = q2Of(), t = trainOf(), gi = t.inv.indexOf('gold');
   if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'COOK: I DREAM OF A GOLDEN RAMEN. BRING ME A GOLD FISH FROM THE LAKE! (QUEST STARTED)'; say(vTalk); vAfterTalk = openFoodMenu; }
   else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU, TRAINING CAP +2)'; say(vTalk); vAfterTalk = openFoodMenu; }
-  else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: BRING THE COOK A GOLD FISH.'; openFoodMenu(); }
+  else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: GOLD FISH FOR COOK'; openFoodMenu(); }
 }
 function friendItems() {
   const t = trainOf(), b = bondOf();
@@ -2056,6 +2106,7 @@ refreshTouchToggles();
 if (params.get('skipintro')) newGame({}); else toTitle();
 window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; },
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
+  get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; } };
 requestAnimationFrame(frame);
 })();
