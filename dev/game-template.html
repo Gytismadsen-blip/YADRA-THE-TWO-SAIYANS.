@@ -1110,6 +1110,18 @@ function cleanHero(h) {
 function readSlot(i) {
   try { const s = localStorage.getItem(SAVE_KEY(i)); if (!s) return null; const d = JSON.parse(s); return d && d.v === 1 && d.hero ? d : null; } catch (e) { return null; }
 }
+let posT = 0;
+function savePos() { // remember where you stand, so Continue puts you back there
+  if (!saveData || curSlot < 0 || mode !== 'village' || ROOMS[area] || vFish) return;
+  saveData.pos = { area, x: Math.round(vx), y: Math.round(vy) }; saveData.savedAt = Date.now(); writeSlot(curSlot, saveData);
+}
+function restorePos(d) {
+  const q = d && d.pos; if (!q || typeof q.x !== 'number' || typeof q.y !== 'number') return;
+  if (!(q.area === 'village' || q.area === 'forest' || TOWNS[q.area])) return;
+  if (q.area === 'village' && q.x < 0) return;
+  toPlace(q.area, q.x, q.y, 'WELCOME BACK, ' + hero.name + '. YOU ARE IN ' + areaLabel(q.area) + '.'); vInputLock = .6;
+}
+addEventListener('pagehide', savePos); document.addEventListener('visibilitychange', () => { if (document.hidden) savePos(); });
 function writeSlot(i, d) { try { localStorage.setItem(SAVE_KEY(i), JSON.stringify(d)); return true; } catch (e) { return false; } }
 function anySave() { return [0, 1, 2].some(i => readSlot(i)); }
 function recordFight(win) { // progress is saved after every fight
@@ -1466,6 +1478,7 @@ function vSolid(x, y) {
   return V_TREES.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function villageUpdate(dt) {
+  posT += dt; if (posT > 2) { posT = 0; savePos(); }
   if (vInputLock > 0) vInputLock -= dt;
   if (vFlash > 0) vFlash -= dt; if (vFade > 0) vFade = Math.max(0, vFade - dt * 3);
   if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
@@ -1799,7 +1812,7 @@ function drawVillage() {
   ctx.restore();
   { const tint = ['rgba(10,10,70,.42)', 'rgba(255,110,50,.18)', 'rgba(255,190,90,.08)', null][Math.max(0, Math.min(3, t.sessions))]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, CW, 196); } }
   // top bar
-  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, CW, 12);
+  ctx.fillStyle = 'rgba(8,8,24,.88)'; ctx.fillRect(0, 0, CW, 12);
   textS(hero.name, 6, 3, '#80c8ff', 1); textS('DAY ' + t.day + ' ' + timeName(t), 66, 3, t.sessions ? '#ffe060' : '#ff8080', 1);
   const wide = CW > 320, fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, wide ? 158 : 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, wide ? 220 : 252, 3, '#ffb060', 1);
@@ -2780,7 +2793,7 @@ function menuPress(k) {
       if (slotPurpose === 'continue') {
         if (!d) { sfx('bad'); return true; }
         sfx('ok'); hero = cleanHero(d.hero); curSlot = slotIdx; saveData = d; P.set = makeHeroSet(hero); stopSpeech();
-        toVillage(d.fights > 0 ? 'ROKU: BACK, ' + hero.name + '? TRAIN FIRST.' : 'ROKU: TRAIN FIRST. I WAIT IN THE ARENA.');
+        toVillage(d.fights > 0 ? 'ROKU: BACK, ' + hero.name + '? TRAIN FIRST.' : 'ROKU: TRAIN FIRST. I WAIT IN THE ARENA.'); restorePos(d);
       } else {
         if (d && !slotConfirm) { slotConfirm = true; sfx('warn'); return true; }
         sfx('ok'); curSlot = slotIdx; slotConfirm = false; cr = Object.assign({}, DEFAULT_HERO); crRow = 0; mode = 'creator';
