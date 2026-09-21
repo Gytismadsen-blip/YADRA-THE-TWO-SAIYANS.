@@ -436,7 +436,27 @@ const SET_R = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R);
 const SET_R2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_R2);
 const PAL_B = { K:'#2a2a3a', S:'#d8a878', B:'#101010', R:'#8a30b0', D:'#402060', O:'#5a3a80', A:'#404050', Y:'#a0a0b0' };
 const SET_B = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_B);
-const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
+const PAL_BOAR = { K:'#3a2210', S:'#8a5a34', O:'#b07a48', Y:'#d8a888', T:'#f4ecd8', B:'#101010', R:'#e03030', D:'#2a160a' };
+function boarGrid(pose) {
+  const w = 34, h = 24, g = Array.from({ length: h }, () => Array(w).fill('.'));
+  const put = (x, y, c) => { if (x >= 0 && y >= 0 && x < w && y < h) g[y][x] = c; };
+  const ell = (cx, cy, rx, ry, c) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) put(x, y, c); };
+  const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) put(x, y, c); };
+  const bob = pose === 'idle1' ? 1 : 0, dip = pose === 'atk' ? 3 : 0, lean = pose === 'atk' ? 2 : 0;
+  [[7, 0], [11, 1], [21, 0], [25, 1]].forEach(([x, alt]) => { const bot = 22 - (alt && pose === 'idle1' ? 1 : 0); rect(x, 15, x + 2, bot, 'S'); rect(x, bot - 1, x + 2, bot, 'D'); });
+  rect(0, 7 + bob, 2, 8 + bob, 'K'); put(0, 6 + bob, 'K'); put(1, 5 + bob, 'K');                       // tail
+  ell(14 + lean, 12 + bob, 12, 7, 'S'); ell(14 + lean, 10 + bob, 10, 3, 'O');                          // body and lighter back
+  for (let x = 6 + lean; x <= 22 + lean; x += 3) { put(x, 4 + bob, 'K'); put(x, 5 + bob, 'K'); put(x + 1, 5 + bob, 'K'); } // bristly mane
+  ell(28 + lean, 13 + dip, 6, 5, 'S');                                                                  // head
+  rect(28 + lean, 14 + dip, 33, 17 + dip, 'Y'); put(33, 15 + dip, 'B'); put(32, 15 + dip, 'B');        // snout and nostrils
+  rect(27 + lean, 10 + dip, 30 + lean, 10 + dip, 'B'); put(28 + lean, 11 + dip, 'R'); put(29 + lean, 11 + dip, 'R'); // angry eye and brow
+  rect(25 + lean, 7 + dip, 27 + lean, 9 + dip, 'K');                                                    // ear
+  put(30 + lean, 18 + dip, 'T'); put(31 + lean, 18 + dip, 'T'); put(31 + lean, 19 + dip, 'T'); put(32 + lean, 17 + dip, 'T'); // tusk
+  return g.map(r => r.join(''));
+}
+const SET_BOAR = makeSet({ idle0: boarGrid('idle0'), idle1: boarGrid('idle1'), atk: boarGrid('atk') }, PAL_BOAR);
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
+  bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
 let foe = FOES.roku;
 
 // ---------- background (Yardrat dusk), drawn once ----------
@@ -588,7 +608,7 @@ function pickVoice() {
          v.find(x => /aria|guy|jenny|zira|david|mark/i.test(x.name)) || v[0] || null;
 }
 function stopSpeech() { speakId++; speaking = false; if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {} }
-const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 }, bandit: { pitch: 1.05, rate: 1.22 } };
+const VOICES = { narrator: { pitch: 1, rate: 1 }, gytis: { pitch: 1.25, rate: 1.02 }, roku: { pitch: .7, rate: .95 }, bandit: { pitch: 1.05, rate: 1.22 }, beast: { pitch: .5, rate: .8 } };
 function say(text, opt) {
   if (!voiceOn || !window.speechSynthesis) return;
   stopSpeech();
@@ -672,6 +692,27 @@ FOES.bandit.over = function (win, st) {
   const last = st.log[st.log.length - 1], fled = last && last.notes.includes('fled');
   if (win) return fled ? 'BANDIT: I QUIT! THE BOSS CAN DO IT HIMSELF!' : st.p.hp <= 25 ? 'BANDIT: HA! LUCKY... I ALMOST HAD YOU!' : 'BANDIT: OKAY! OKAY! YOU WIN!';
   return st.p.strain >= 50 ? 'BANDIT: LOOK AT YOU. TOO WEAK TO STAND!' : 'BANDIT: GO HOME, KID. MORE WILL COME.';
+};
+FOES.boar.tr = {
+  'ROKU TRIED TO READ YOU. YOU CHANGED IT UP!': 'THE BOAR SNORTS AND MISSES!', 'ROKU CHANGED HIS PLAN AFTER READING YOU!': 'THE BOAR SUDDENLY CHANGES DIRECTION!',
+  'ROKU IS DOWN!': 'THE BOAR COLLAPSES, EXHAUSTED.', 'ROKU FLEES!': 'THE BOAR SQUEALS AND CRASHES INTO THE WOODS!', 'ROKU GUARDS!': 'THE BOAR PAWS THE GROUND...',
+  'ROKU COUNTERS YOUR STRIKE!': 'THE BOAR HEADBUTTS YOU BACK!', 'ROKU SENDS YOUR BLAST BACK!': 'THE BOAR SHRUGS OFF YOUR BLAST!', 'ROKU FIRES A BLAST!': 'THE BOAR STOMPS! A SHOCKWAVE!',
+  'ROKU TRACKS YOUR STEP!': 'THE BOAR SMELLS WHERE YOU WILL BE!', 'ROKU BREAKS YOUR CHARGE!': 'THE BOAR CRASHES INTO YOUR CHARGE!', 'ROKU BREAKS YOUR GUARD!': 'THE BOAR RAMS THROUGH YOUR GUARD!',
+  'ROKU ATTACKS!': 'THE BOAR ATTACKS!', 'ROKU RUSHES IN!': 'THE BOAR CHARGES!', 'Come on!': 'Snort!', 'Ki Blast!': 'Squeal!', 'Here I come!': 'Grrr!' };
+const READ_BOAR = { lance: 'GRRR...', strike: 'SNORT!', blast: 'HUFF HUFF!', phantom: 'GRRRAH!', charge: 'SQUEEEAL!', guard: 'GRR GRR!', sense: 'SNIFF SNIFF!' };
+Object.keys(READ_LINE).forEach(k => { FOES.boar.tr['ROKU: ' + READ_LINE[k]] = 'BOAR: ' + READ_BOAR[k]; });
+FOES.boar.react = {
+  s75: 'THE BOAR SMELLS YOUR WEAKNESS AND PAWS THE GROUND.', s75b: 'THE BOAR IS ABOUT TO CHARGE. YOU ARE SHAKING!', s50: 'THE BOAR SNORTS. YOUR POWER MAKES IT NERVOUS.',
+  lance: 'THE BOAR SQUEALS. THAT HURT!', dodge: 'THE BOAR SPINS AROUND. WHERE DID YOU GO?', sense: 'THE BOAR STARES AT YOU, CONFUSED.',
+  kilow: 'THE BOAR LOWERS ITS HEAD. YOU ARE EMPTY!', hplow: 'THE BOAR HUFFS. IT SENSES THE END.', rlow: 'THE BOAR IS FRIGHTENED. IT LOOKS FOR A WAY OUT.' };
+FOES.boar.banter = { hit: ['GRRRR!', 'SNORT!', 'ROOOAR!'], hurt: ['SQUEEEAL!', 'HUFF! HUFF!'], guard: ['GRR...'], charge: ['SNORT SNORT!'], low: ['WHIMPER...', 'SQUEAL!'], other: ['GRRR!', 'HUFF!'] };
+FOES.boar.info = {
+  strike: ['12 DAMAGE.', 'IT NEVER GUARDS.', 'RAW POWER.'], blast: ['18 DAMAGE.', 'IT DOES NOT SEND', 'BLASTS BACK.'],
+  charge: ['+40 KI.', 'IT LOVES TO CHARGE', 'INTO YOU. BEWARE.'], sense: ['SEE ITS NEXT', '2 MOVES.', 'COSTS A TURN.'] };
+FOES.boar.over = function (win, st) {
+  const last = st.log[st.log.length - 1], fled = last && last.notes.includes('fled');
+  if (win) return fled ? 'THE BOAR ESCAPED INTO THE WOODS...' : 'YOU WORE IT OUT! MEAT FOR DINNER.';
+  return 'THE BOAR RAMMED YOU. TRY AGAIN TOMORROW.';
 };
 const foeInfo = mv => (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name)));
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
@@ -1248,9 +1289,9 @@ function renderInner() {
     const a = clamp01(1.5 - banner.t), w = textW(banner.text, 2), roku = banner.who === 'roku', jx = banner.t < .3 ? Math.round(rnd(-1, 1)) : 0;
     ctx.globalAlpha = a; textS(banner.text, Math.round(W / 2 - w / 2) + jx, roku ? 62 : 58, roku ? '#ff9090' : '#ffe060', 2); ctx.globalAlpha = 1;
   }
-  if (cine > .01) { const bh = Math.round(18 * cine); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, 160 - bh, W, bh); }
+  if (cine > .01) { const bh = Math.round(18 * cine); ctx.fillStyle = '#000'; ctx.fillRect(-OFFX, 0, CW, bh); ctx.fillRect(-OFFX, 160 - bh, CW, bh); }
   ctx.restore();
-  if (flashScr > 0) { ctx.fillStyle = 'rgba(255,255,255,' + clamp01(flashScr * 1.1) + ')'; ctx.fillRect(0, 0, W, 160); }
+  if (flashScr > 0) { ctx.fillStyle = 'rgba(255,255,255,' + clamp01(flashScr * 1.1) + ')'; ctx.fillRect(-OFFX, 0, CW, 160); }
   if (cine < .3 && mode !== 'over') drawHud();
   drawPanel(); drawToggles();
   if (mode === 'over') drawOver();
@@ -1443,7 +1484,7 @@ function trainOf() {
   const t = saveData.train || (saveData.train = {});
   const n = (v, lo, hi, d) => Math.max(lo, Math.min(hi, v === undefined ? d : (v | 0)));
   t.body = n(t.body, 0, STAT_MAX, 0); t.ki = n(t.ki, 0, STAT_MAX, 0); t.focus = n(t.focus, 0, STAT_MAX, 0);
-  t.inv = Array.isArray(t.inv) ? t.inv.filter(k => FISH[k]).slice(0, BAG_MAX) : []; t.pity = n(t.pity, 0, 99, 0); t.day = n(t.day, 1, 999, 1); t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
+  t.inv = Array.isArray(t.inv) ? t.inv.filter(k => FISH[k]).slice(0, BAG_MAX) : []; t.pity = n(t.pity, 0, 99, 0); t.huntDay = n(t.huntDay, 0, 99999, 0); t.day = n(t.day, 1, 999, 1); t.meal = n(t.meal, 0, 80, 0); t.mom = !!t.mom; t.fatigue = n(t.fatigue, 0, 99, 0); t.sessions = n(t.sessions, 0, 9, 3); t.grav = n(t.grav, 0, GRAV.length - 1, 0);
   return t;
 }
 function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
@@ -1563,7 +1604,7 @@ const V_PEOPLE = [
   { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
   { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [110, 128, 172, 186], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
   { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
-const V_TIPS = ['CATCH FISH AT THE LAKE DOCK. GRILL THEM AT THE RAMEN HOUSE. IT IS FREE.', 'SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
+const V_TIPS = ['A WILD BOAR ROAMS THE FOREST. FOLLOW ITS TRACKS WITH SPIRIT SENSE. HIT IT HARD BEFORE IT RUNS!', 'CATCH FISH AT THE LAKE DOCK. GRILL THEM AT THE RAMEN HOUSE. IT IS FREE.', 'SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
@@ -1600,6 +1641,7 @@ function villageUpdate(dt) {
   if (vFlash > 0) vFlash -= dt; if (vFade > 0) vFade = Math.max(0, vFade - dt * 3);
   if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
   const near = vNearPerson(), nearP = curPeople()[near];
+  if (area === 'forest' && !vTalk && vBanditT <= 0) { const bs = boarSpot(); if (bs && Math.hypot(vx - bs.x, vy - bs.y) < 34) { vTalk = 'A WILD BOAR BLOCKS THE TRAIL! IT SNORTS AND PAWS THE GROUND. (HUNT: COSTS TIME, STRAIN +8)'; vAfterTalk = fightBoar; vBanditT = 8; sfx('warn'); say(vTalk); } }
   if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
   if (area === 'village') V_PEOPLE.forEach((p, i) => { // wander, but stand still while you are close or talking
     if (p === nearP || vTalk || (p.hidden && questOf().step < 3)) return;
@@ -1822,6 +1864,15 @@ for (let i = 0; i < 150; i++) {
   F_TREES.push({ x, y });
 }
 let vSenseT = 0, vSenseTo = null, vBanditT = 0, vAfterTalk = null;
+const BOAR_SPOTS = [[180, 140], [330, 200], [420, 200]];
+function boarSpot() { // one boar per day, gone at night or after you hunted it
+  const t = trainOf(); if (t.sessions <= 0 || t.huntDay === t.day) return null;
+  const sp = BOAR_SPOTS[(t.day * 5 + 1) % BOAR_SPOTS.length]; return { x: sp[0], y: sp[1] };
+}
+function fightBoar() {
+  const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.fatigue = Math.min(99, t.fatigue + 8); t.huntDay = t.day; trSave();
+  stopSpeech(); newGame({ foe: 'boar', line: 'GRRRAAAH!' });
+}
 function questOf() {
   trainOf(); const q = saveData.quest || (saveData.quest = { step: 0, clues: [0, 0, 0] });
   q.step = Math.max(0, Math.min(4, q.step | 0)); if (!Array.isArray(q.clues) || q.clues.length !== 3) q.clues = [0, 0, 0];
@@ -1844,6 +1895,12 @@ function toForest(x, y, line) {
 }
 function fightBandits() { stopSpeech(); newGame({ foe: 'bandit', line: 'GET LOST, KID, OR ELSE!' }); }
 function foeAfter(win) { // called from the fight-over screen after a non-Roku fight
+  if (foe.id === 'boar') {
+    const last = state.log[state.log.length - 1], fled = last && last.notes.includes('fled'), t = trainOf(); let line;
+    if (win && !fled) { if (t.inv.length < BAG_MAX) { t.inv.push('meat'); line = 'YOU GOT BOAR MEAT! (BAG ' + t.inv.length + '/' + BAG_MAX + ')'; } else line = 'YOU WORE IT OUT, BUT YOUR BAG IS FULL.'; }
+    else if (win) line = 'THE BOAR ESCAPED INTO THE WOODS...'; else line = 'THE BOAR RAMMED YOU. TRY AGAIN TOMORROW.';
+    trSave(); toForest(vx, vy, line); return;
+  }
   const q = questOf();
   if (win) { q.step = Math.max(q.step, 3); trSave(); toForest(505, 202, 'THE GIRL RUNS TO YOU. GO TELL HER BROTHER!'); }
   else toForest(40, 140, 'THEY BEAT YOU. TRAIN, EAT, AND TRY AGAIN.');
@@ -1874,7 +1931,8 @@ function senseNow() {
   const t = trainOf(), q = questOf(); if (vSenseT > 0) return;
   t.fatigue = Math.min(99, t.fatigue + 2); trSave(); vSenseT = 2.6; sfx('warn');
   const ci = F_CLUES.findIndex((c, i) => !q.clues[i]);
-  vSenseTo = ci >= 0 ? { x: F_CLUES[ci].x, y: F_CLUES[ci].y } : (q.step < 3 ? { x: 530, y: 205 } : { x: 8, y: 138 });
+  const bs = boarSpot();
+  vSenseTo = ci >= 0 ? { x: F_CLUES[ci].x, y: F_CLUES[ci].y } : bs ? bs : (q.step < 3 ? { x: 530, y: 205 } : { x: 8, y: 138 });
   vMsg = 'SPIRIT SENSE... STRAIN +2.';
 }
 function inspectClue() {
@@ -1892,6 +1950,7 @@ function drawForest() {
   F_CLUES.forEach((c, i) => { const f = q.clues[i]; ctx.globalAlpha = f ? .35 : 1; if (c.kind === 'feet') { rr(c.x - 5, c.y - 3, 4, 6, '#5a4a30'); rr(c.x + 2, c.y - 6, 4, 6, '#5a4a30'); } else if (c.kind === 'basket') { rr(c.x - 7, c.y - 6, 14, 8, '#a06a30'); rr(c.x - 6, c.y - 9, 4, 3, '#e8e8e8'); rr(c.x + 2, c.y - 9, 4, 3, '#d05050'); } else { rr(c.x - 5, c.y - 4, 10, 6, '#c04050'); rr(c.x - 2, c.y + 2, 4, 3, '#c04050'); } ctx.globalAlpha = 1; if (!f && vSenseT > 0) { ctx.strokeStyle = 'rgba(120,255,220,.8)'; ctx.strokeRect(c.x - 10, c.y - 12, 20, 18); } });
   const items = F_TREES.filter(t => t.x > camX - 20 && t.x < camX + CW + 20 && t.y > camY - 10 && t.y < camY + 240).map(t => ({ y: t.y, draw: () => vTree(t) }));
   if (!open) items.push({ y: F_BUSH[3], draw: () => { for (let y = F_BUSH[1]; y < F_BUSH[3]; y += 8) { rr(F_BUSH[0] - 4, y, 26, 10, '#1f5a2a'); rr(F_BUSH[0], y + 2, 14, 6, '#2f7a3a'); } } });
+  { const bs = boarSpot(); if (bs) items.push({ y: bs.y, draw: () => { const im = SET_BOAR.img[Math.floor(time * 2) % 2 ? 'idle1' : 'idle0'], sw = Math.round(im.width * .75), sh = Math.round(im.height * .75); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(bs.x - 13, bs.y - 1, 26, 3); ctx.save(); ctx.translate(bs.x, bs.y + 2); ctx.scale(-1, 1); ctx.drawImage(im, -sw / 2, -sh, sw, sh); ctx.restore(); if (vSenseT > 0) { ctx.strokeStyle = 'rgba(120,255,220,.9)'; ctx.strokeRect(bs.x - 15, bs.y - sh - 3, 30, sh + 6); } } }); }
   drawPeopleAndPlayer(items);
   if (vSenseT > 0) { const u = 1 - vSenseT / 2.6; ctx.strokeStyle = 'rgba(120,255,220,' + (0.8 * (1 - u)) + ')'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(vx, vy - 12, 10 + u * 90, 0, 6.28); ctx.stroke(); ctx.lineWidth = 1;
     if (vSenseTo) { const a = Math.atan2(vSenseTo.y - vy, vSenseTo.x - vx), ax = vx + Math.cos(a) * 34, ay = vy - 12 + Math.sin(a) * 34; ctx.fillStyle = '#80ffe0'; ctx.beginPath(); ctx.moveTo(ax + Math.cos(a) * 8, ay + Math.sin(a) * 8); ctx.lineTo(ax + Math.cos(a + 2.4) * 6, ay + Math.sin(a + 2.4) * 6); ctx.lineTo(ax + Math.cos(a - 2.4) * 6, ay + Math.sin(a - 2.4) * 6); ctx.fill(); } }
@@ -1902,6 +1961,7 @@ const FISH = {
   small:  { n: 'SMALL FISH', hp: 8,  str: -5,  pull: .55, need: 2.2, col: '#a0c0e0', len: 10 },
   medium: { n: 'RIVER FISH', hp: 15, str: -10, pull: .95, need: 3.2, col: '#60a0c0', len: 15 },
   big:    { n: 'BIG FISH',   hp: 25, str: 5,   pull: 1.5, need: 4.2, col: '#3a6a90', len: 22 },
+  meat:   { n: 'BOAR MEAT', hp: 30, str: 10, pull: 0, need: 1, col: '#a06040', len: 14 },
   gold:   { n: 'GOLD FISH',  hp: 20, str: -30, pull: 1.25, need: 3.6, col: '#f0c030', len: 16 } };
 const DOCK = { x: 450, y: 344 }, BAG_MAX = 4;
 let vFish = null;
