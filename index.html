@@ -1839,10 +1839,7 @@ function villagePress(k) {
   else if (tg === 'arena') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); }
   else if (tg === 'ramen') enterRoom('ramen');
   else if (tg === 'home') enterRoom('home');
-  else if (tg === 'rest') {
-    if (t.sessions <= 0) sleepNow();
-    else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
-    else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU SLEPT. STRAIN -40.'; say(vMsg); }
+  else if (tg === 'rest') { innMenu('rest');
   } else if (tg === 'elder') {
     sfx('ok'); vTalk = t.fatigue >= 50 ? 'YOU LOOK EXHAUSTED. SLEEP IN THE REST HOUSE FIRST.' : V_TIPS[vTip++ % V_TIPS.length]; say(vTalk);
   } else if (tg === 'bed') { sleepNow();
@@ -2101,7 +2098,7 @@ function drawVillage() {
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
     const pinfo = p ? (p.role === 'cook' ? ['ORDER FOOD', q2Of().step === 1 ? 'HE WANTS A GOLD FISH.' : 'MEALS, OR GRILL A FISH FREE.'] : p.role === 'mom' ? ['TALK TO MOM', t.mom ? 'MOM ALREADY FED YOU.' : 'FREE SOUP. STRAIN -10.'] : [p.dog ? 'PET THE DOG' : 'TALK TO ' + p.name, p.role === 'boy' && questOf().step >= 4 ? 'FRIEND. BOND ' + bondOf().boy + '/5' : '']) : ['', ''];
-    const info = (tg.slice(0, 2) === 't:') ? townInfo(tg) : { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', t.sessions ? 'STRAIN -40. COSTS TIME.' : 'SLEEP HERE. NEW DAY.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], stove: ['COOK AT THE STOVE', '1 TIME. BUFF FOR TODAY.'], machine: ['USE THE GRAVITY MACHINE', 'BODY, KI, FOCUS.'], stone: ['TOUCH THE MOONSTONE', 'IT GLOWS.'], cchest: ['OPEN THE CHEST', ''], person: pinfo }[tg];
+    const info = (tg.slice(0, 2) === 't:') ? townInfo(tg) : { train: ['TRAINING ROOM', 'BODY, KI, FOCUS. GRAVITY.'], arena: ['ARENA: FIGHT ROKU', t.fatigue >= 50 ? 'YOU ARE TIRED! STRAIN ' + t.fatigue : 'STRAIN ' + t.fatigue + '. READY?'], rest: ['REST HOUSE', t.sessions ? 'SLEEP TILL TOMORROW OR REST.' : 'SLEEP HERE. NEW DAY.'], ramen: ['ENTER RAMEN HOUSE', 'EAT, TALK, LISTEN.'], home: ['ENTER YOUR HOME', 'MOM IS INSIDE.'], elder: ['TALK TO ELDER SOBA', 'HE HAS ADVICE.'], sign: ['READ THE SIGN', ''], clue: ['LOOK CLOSER', 'SOMETHING IS HERE.'], fish: ['FISH AT THE DOCK', 'COSTS TIME. BAG ' + t.inv.length + '/' + BAG_MAX], bed: ['SLEEP IN YOUR BED', 'NEW DAY. STRAIN -60.'], stove: ['COOK AT THE STOVE', '1 TIME. BUFF FOR TODAY.'], machine: ['USE THE GRAVITY MACHINE', 'BODY, KI, FOCUS.'], stone: ['TOUCH THE MOONSTONE', 'IT GLOWS.'], cchest: ['OPEN THE CHEST', ''], person: pinfo }[tg];
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg || buffLine(), 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
@@ -2541,15 +2538,18 @@ function townInfo(tg) {
   if (tg[2] === 's') return ['READ THE SIGN', ''];
   if (tg[2] === 'o') { const o = T.branches[+tg.slice(3)], f = (saveData.found || {})[o.id]; return ({ chest: [f ? 'EMPTY CHEST' : 'OPEN THE CHEST', f ? 'YOU TOOK EVERYTHING.' : 'SOMETHING IS INSIDE.'], camp: ['THE CAMP FIRE', 'REST OR COOK.'], cave: ['ENTER THE CAVE', 'MOONSTONE CAVE.'], hidden: [f ? 'THE SECRET PASS' : 'A DEAD END...', f ? 'A SHORTCUT ON THE MAP.' : 'THE BUSHES LOOK ODD.'] })[o.kind]; }
   const b = T.bl[+tg.slice(2)], t = trainOf();
-  return ({ inn: t.sessions ? ['THE INN', 'STRAIN -40. COSTS TIME.'] : ['THE INN', 'SLEEP HERE. NEW DAY.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
+  return ({ inn: ['THE INN', t.sessions ? 'SLEEP TILL TOMORROW OR REST.' : 'SLEEP HERE. NEW DAY.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
 }
 function nightHint() { return TOWNS[area] && TOWNS[area].kind === 'town' ? 'IT IS NIGHT. SLEEP AT THE INN.' : 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; }
-function restNow() {
+function innMenu(where) { // sleep until tomorrow at any time, or just rest a little
   const t = trainOf();
-  if (t.sessions <= 0) { sleepNow(); vMsg = 'YOU SLEPT AT THE INN. ' + vMsg; say(vMsg); }
-  else if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; }
-  else { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU RESTED AT THE INN. STRAIN -40.'; say(vMsg); }
+  if (t.sessions <= 0) { sleepNow(); vMsg = (where === 'inn' ? 'YOU SLEPT AT THE INN. ' : 'YOU SLEPT IN THE REST HOUSE. ') + vMsg; say(vMsg); return; }
+  sfx('ok'); vChoice = { idx: 0, opts: ['SLEEP UNTIL TOMORROW', 'REST: STRAIN -40, 1 TIME', 'LEAVE'], no: '', pick: i => {
+    if (i === 0) { sleepNow(); vMsg = (where === 'inn' ? 'YOU SLEPT AT THE INN. ' : 'YOU SLEPT IN THE REST HOUSE. ') + vMsg; say(vMsg); }
+    else if (i === 1) { if (t.fatigue <= 0) { sfx('bad'); vMsg = 'YOU ARE NOT TIRED.'; return; } t.sessions--; t.fatigue = Math.max(0, t.fatigue - 40); trSave(); sfx('ok'); vFlash = .35; vMsg = 'YOU RESTED. STRAIN -40.'; say(vMsg); }
+  } };
 }
+function restNow() { innMenu('inn'); }
 function meditateNow() {
   const t = trainOf();
   if (t.sessions <= 0) { sfx('bad'); vMsg = nightHint(); return; }
