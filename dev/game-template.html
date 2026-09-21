@@ -2328,13 +2328,18 @@ function spotAct(b) {
   if (b.kind === 'chest') openChest(b.id, false);
   else if (b.kind === 'camp') campAct(b);
   else if (b.kind === 'cave') { hutReturn = { area, x: b.x, y: b.end + 12 }; sfx('ok'); enterRoom('cave'); }
-  else if (f[b.id]) { sfx('ok'); vTalk = 'THE SECRET PASS IS OPEN. IT IS A SHORTCUT ON THE MAP.'; say(vTalk); }
+  else if (f[b.id]) openPass(b);
   else {
     t.fatigue = Math.min(99, t.fatigue + 2);
-    if (t.focus >= 5) { f[b.id] = 1; trSave(); sfx('win'); vFlash = .4; vTalk = 'SPIRIT SENSE: THE BUSHES ARE NOT REAL! A SECRET PASS OPENS. (SHORTCUT ON THE MAP)'; }
+    if (t.focus >= 5) { f[b.id] = 1; trSave(); sfx('win'); vFlash = .4; vTalk = 'SPIRIT SENSE: THE BUSHES ARE NOT REAL! A SECRET PASS OPENS. (SHORTCUT ON THE MAP)'; vAfterTalk = () => openPass(b); }
     else { trSave(); sfx('warn'); vTalk = 'A DEAD END. YOU SENSE SOMETHING, BUT YOUR FOCUS IS TOO LOW. (FOCUS 5, STRAIN +2)'; }
     say(vTalk);
   }
+}
+const PASS_TO = { sc_r3: 'tavora', sc_r6: 'mirakai', sc_r10: 'keshin' };
+function openPass(b) {
+  const to = PASS_TO[b.id], nm = TOWNS[to].name; sfx('ok'); vTalk = 'THE SECRET PASS LEADS STRAIGHT TO ' + nm + '. GO THROUGH?'; say(vTalk);
+  vAfterTalk = () => { vChoice = { idx: 0, opts: ['GO THROUGH TO ' + nm, 'NOT NOW'], pick: i => { if (i !== 0) return; const need = GATE_INTO[to]; if (need && milestones() < need) { sfx('bad'); vTalk = 'THE PASS IS BLOCKED. ' + nm + ' NEEDS ' + need + ' MILESTONES.'; say(vTalk); return; } markVisited(to); trSave(); toPlace(to, TOWNS[to].start[0], TOWNS[to].start[1], 'YOU SLIP THROUGH THE SECRET PASS TO ' + nm + '. (FREE, NO TIME LOST)'); }, no: '' }; };
 }
 function touchStone() {
   const t = trainOf(), f = foundOf();
