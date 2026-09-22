@@ -819,9 +819,15 @@ FOES.rival.react = { s75: 'RIVAL: HA! LOOK AT YOU SHAKE!', s75b: 'RIVAL: ONE MOR
 FOES.rival.banter = { hit: ['TOO SLOW!', 'IS THAT ALL?!', 'KNEEL!'], hurt: ['GRR! LUCKY HIT!', 'YOU WILL PAY FOR THAT!'], guard: ['STOP HIDING!'], charge: ["I WON'T LET YOU CHARGE!"], low: ['I WILL NEVER GIVE UP!', 'I AM THE CHAMPION!'], other: ['COME ON!', 'FIGHT ME!'] };
 FOES.rival.info = { strike: ['12 DAMAGE.', 'HE SMASHES A LAZY', 'STRIKE BACK.'], blast: ['18 DAMAGE.', 'HE SENDS BLASTS BACK', 'HARD.'], charge: ['+40 KI.', 'HE RUSHES ANYONE', 'WHO CHARGES.'], sense: ['SEE HIS NEXT', '2 MOVES.', 'HE RAGES AT HALF HP.'] };
 FOES.rival.over = (win) => win ? 'RIVAL: IMPOSSIBLE... I LOST?!' : 'RIVAL: HA! WEAK. COME BACK LATER.';
-const foeInfo = mv => { // the first line shows the damage your training really gives
+const foeInfo = mv => { // the first line shows the damage your training really gives; a STRAIN line is kept in sync with the real cost too (e.g. Spirit Lance's strain drops as Ki trains up)
   const base = (foe.info && foe.info[mv]) || (foe.id === 'roku' ? INFO[mv] : INFO[mv].map(l => l.replace(/ROKU/g, foe.name))), M = C.CFG.moves[mv];
-  if (M && M.dmg && /^\d+ DAMAGE/.test(base[0])) { const a = base.slice(); a[0] = Math.round(M.dmg * (C.CFG.dmgMul[mv] || 1)) + ' DAMAGE.'; return a; }
+  const strainLine = (M && M.strain) ? base.findIndex(l => /^STRAIN \+\d+(\.\d+)?\.$/.test(l)) : -1;
+  if ((M && M.dmg && /^\d+ DAMAGE/.test(base[0])) || strainLine > -1) {
+    const a = base.slice();
+    if (M.dmg && /^\d+ DAMAGE/.test(a[0])) a[0] = Math.round(M.dmg * (C.CFG.dmgMul[mv] || 1)) + ' DAMAGE.';
+    if (strainLine > -1) a[strainLine] = 'STRAIN +' + M.strain + '.';
+    return a;
+  }
   return base;
 };
 const rokuName = m => m.type === 'read' ? 'WATCHES ' + NAME[m.target] : m.type.toUpperCase();
