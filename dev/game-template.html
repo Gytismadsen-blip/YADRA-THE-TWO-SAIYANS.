@@ -219,13 +219,18 @@ const PAL_EMBER = { K:'#201010', S:'#a05840', B:'#101010', R:'#a02818', D:'#4010
 const SET_FROST = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_FROST);
 const SET_DUNE = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_DUNE);
 const SET_EMBER = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_EMBER);
+// chapter 2 final boss: gathers the corruption behind the 3 region guardians
+const PAL_SHADOW = { K:'#0a0a12', S:'#1a1220', B:'#000000', R:'#2a1a40', D:'#150a20', O:'#3a2050', A:'#6a3a90', Y:'#a060ff' };
+const PAL_SHADOW2 = { K:'#1a1030', S:'#2a1830', B:'#000000', R:'#ff40c0', D:'#3a1050', O:'#ff70e0', A:'#ffffff', Y:'#ff40c0' };
+const SET_SHADOW = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_SHADOW), SET_SHADOW2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_SHADOW2);
 const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R, biome: 'temple' }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.4, dmg: 1.2, late: .9, plan: .85, fury: true, voice: 'master', biome: 'temple', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
   rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.22, dmg: 1.07, late: .7, plan: .6, fury: true, voice: 'rival', biome: 'temple', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
   boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', biome: 'forest', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
   bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', biome: 'forest', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } },
   frostguard: { id: 'frostguard', name: 'FROST RAIDER', set: SET_FROST, hp: 1.05, dmg: 1.05, late: .55, plan: .65, fury: false, voice: 'bandit', biome: 'snow', ai: { rush: .3, blast: .55, chargeHunter: .3, flee: .12 } },
   duneraider: { id: 'duneraider', name: 'DUNE RAIDER', set: SET_DUNE, hp: .95, dmg: 1.15, late: .35, plan: .3, fury: false, voice: 'bandit', biome: 'desert', ai: { rush: .65, blast: .3, chargeHunter: .7, flee: .3 } },
-  embersmith: { id: 'embersmith', name: 'EMBER SMITH', set: SET_EMBER, hp: 1.2, dmg: 1.12, late: .7, plan: .55, fury: false, voice: 'bandit', biome: 'volcano', ai: { rush: .4, blast: .45, chargeHunter: .2, flee: .05 } } };
+  embersmith: { id: 'embersmith', name: 'EMBER SMITH', set: SET_EMBER, hp: 1.2, dmg: 1.12, late: .7, plan: .55, fury: false, voice: 'bandit', biome: 'volcano', ai: { rush: .4, blast: .45, chargeHunter: .2, flee: .05 } },
+  shadow: { id: 'shadow', name: 'THE SHADOW OF YARDRAT', set: SET_SHADOW, set2: SET_SHADOW2, furyLabel: 'SHADOW', hp: 1.55, dmg: 1.25, late: .9, plan: .85, fury: true, voice: 'master', biome: 'void', ai: { rush: .4, blast: .45, chargeHunter: .25, flee: 0 } } };
 let foe = FOES.roku;
 
 // ---------- background (Yardrat dusk), drawn once ----------
@@ -289,7 +294,12 @@ const bgVolcano = makeArenaBg(['#1a0808','#2a0a0a','#3a0e0c','#5a1810','#7a2814'
   g.fillStyle = 'rgba(255,120,40,.35)'; g.fillRect(0, 60, W, 40);
   [[40,120],[130,124],[220,120],[290,124]].forEach(p => { g.fillStyle = '#3a2018'; g.fillRect(p[0], p[1], 16, 12); g.fillStyle = '#ff7030'; g.fillRect(p[0] + 4, p[1] - 4, 4, 4); g.fillRect(p[0] + 9, p[1] - 2, 3, 3); });
 });
-const BG_SET = { temple: bg, forest: bgForest, snow: bgSnow, desert: bgDesert, volcano: bgVolcano };
+const bgVoid = makeArenaBg(['#020106','#05040c','#0a0714','#120e20','#1a1230','#241a44','#301c58','#3a2264'], '#180f28', '#0e0818', '#0a0612', '#140a20', '#06040a', g => {
+  g.fillStyle = 'rgba(160,90,255,.5)'; g.fillRect(150, 30, 20, 20);
+  g.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 26; i++) g.fillRect((i * 61) % W, (i * 19) % 60, 1, 1);
+  [[40,90],[280,90]].forEach(p => { g.fillStyle = 'rgba(160,60,220,.45)'; g.beginPath(); g.moveTo(p[0], p[1] + 46); g.lineTo(p[0] + 10, p[1] + 4); g.lineTo(p[0] + 20, p[1] + 46); g.fill(); });
+});
+const BG_SET = { temple: bg, forest: bgForest, snow: bgSnow, desert: bgDesert, volcano: bgVolcano, void: bgVoid };
 function curBg() { return BG_SET[(foe && foe.biome) || 'temple']; }
 
 // ---------- audio (WebAudio chiptune, no files) ----------
@@ -1675,6 +1685,7 @@ function villagePress(k) {
     else if (p.role === 'sister') sisterTalk(p);
     else if (p.shop) shopTalk(p);
     else if (p.role === 'cook') cookTalk();
+    else if (p.ch2) ch2Talk(p);
     else if (p.role === 'mom') {
       if (t.mom) { sfx('bad'); vTalk = 'MOM: YOU ALREADY ATE! NOW GO TRAIN.'; }
       else { t.mom = true; t.fatigue = Math.max(0, t.fatigue - 10); trSave(); sfx('ok'); vFlash = .35; vTalk = 'MOM: EAT THIS, YOU LOOK THIN. (STRAIN -10, FREE)'; }
@@ -1958,6 +1969,28 @@ function questOf() {
   q.step = Math.max(0, Math.min(4, q.step | 0)); if (!Array.isArray(q.clues) || q.clues.length !== 3) q.clues = [0, 0, 0];
   return q;
 }
+// ---------- chapter 2: the shadow behind the three region guardians ----------
+function ch2Of() { trainOf(); const q = saveData.ch2 || (saveData.ch2 = { step: 0, frost: 0, dune: 0, ember: 0 }); q.step = Math.max(0, Math.min(3, q.step | 0)); return q; }
+function ch2Talk(p) {
+  const q = ch2Of();
+  if (questState('oraya') !== 2) { sfx('ok'); vTalk = 'ASTRONOMER: THE STARS STILL SHOW DANGER. BUT YOU ARE NOT YET CHAMPION OF YARDRAT. FINISH THAT FIRST.'; say(vTalk); return; }
+  if (q.step === 0) { sfx('ok'); offerQuest('ASTRONOMER: THE COLD, THE SAND AND THE FIRE ALL TURNED HOSTILE AT ONCE. THAT IS NOT CHANCE. WILL YOU FIND OUT WHY?', () => { q.step = 1; trSave(); sfx('ok'); vTalk = 'ASTRONOMER: GOOD. DEFEAT THE GUARDIANS AT FROSTHAVEN, SUNKARA AND EMBERPEAK. THEY EACH CARRY A SHARD OF SOMETHING OLDER THAN THEM. (QUEST STARTED)'; say(vTalk); }, 'ASTRONOMER: THEN WATCH THE SKY. IT WILL NOT WAIT FOREVER.'); return; }
+  if (q.step === 1) {
+    const got = ['frost', 'dune', 'ember'].filter(k => q[k]).length;
+    if (got >= 3) { q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'ASTRONOMER: THREE SHARDS OF ONE SHADOW! IT GATHERS ITSELF IN A RIFT BEHIND THE GRAND ARENA. I CAN OPEN IT - BUT ONLY YOU CAN WALK IN.'; say(vTalk); return; }
+    sfx('ok'); vTalk = 'ASTRONOMER: ' + got + '/3 SHARDS SO FAR. THE GUARDIANS OF THE COLD, THE SAND AND THE FIRE EACH CARRY ONE.'; say(vTalk); return;
+  }
+  if (q.step === 2) {
+    sfx('ok'); vTalk = 'ASTRONOMER: THE RIFT IS OPEN. ARE YOU READY?'; say(vTalk);
+    vAfterTalk = () => { vChoice = { idx: 0, opts: ['ENTER THE RIFT', 'NOT YET'], no: 'ASTRONOMER: TAKE YOUR TIME. IT IS NOT GOING ANYWHERE.', pick: i => {
+      if (i !== 0) return;
+      foeReturn = { area, x: vx, y: vy }; stopSpeech();
+      newGame({ foe: 'shadow', line: 'A VOICE MADE OF EVERY VOICE: "YOU CARRY THEIR PIECES. GIVE THEM BACK."' });
+    } }; };
+    return;
+  }
+  sfx('ok'); vTalk = 'ASTRONOMER: YOU DID WHAT I COULD ONLY WATCH THROUGH A LENS. YARDRAT SLEEPS SAFELY TONIGHT.'; say(vTalk);
+}
 const cluesFound = q => q.clues.filter(Boolean).length;
 const gateOpen = () => questOf().step >= 1;
 function forestPeople() { // bandits guard the girl once the hidden trail has opened
@@ -1981,6 +2014,22 @@ function foeAfter(win) { // called from the fight-over screen after a non-Roku f
     if (win && !fled) { if (t.inv.length < BAG_MAX) { t.inv.push('meat'); line = 'YOU GOT BOAR MEAT! (BAG ' + t.inv.length + '/' + BAG_MAX + ')'; } else line = 'YOU WORE IT OUT, BUT YOUR BAG IS FULL.'; }
     else if (win) line = 'THE BOAR ESCAPED INTO THE WOODS...'; else line = 'THE BOAR RAMMED YOU. TRY AGAIN TOMORROW.';
     trSave(); toForest(vx, vy, line); return;
+  }
+  if (foe.id === 'frostguard' || foe.id === 'duneraider' || foe.id === 'embersmith') {
+    const r = foeReturn || { area: 'village', x: 140, y: 178 }, gl = GUARD_LINES[foe.id];
+    if (win) {
+      saveData.coins = (saveData.coins | 0) + 15;
+      const q = ch2Of(), key = foe.id === 'frostguard' ? 'frost' : foe.id === 'duneraider' ? 'dune' : 'ember';
+      let shardLine = ''; if (q.step >= 1 && !q[key]) { q[key] = 1; trSave(); shardLine = ' IT DROPS A GLOWING SHARD.'; }
+      toPlace(r.area, r.x, r.y, gl[2] + ' +15 COINS.' + shardLine);
+    } else toPlace(r.area, r.x, r.y, foe.name + ' WAS TOO STRONG. TRAIN AND TRY AGAIN.');
+    return;
+  }
+  if (foe.id === 'shadow') {
+    const r = foeReturn || { area: 'oraya', x: TOWNS.oraya.start[0], y: TOWNS.oraya.start[1] };
+    if (win) { const q = ch2Of(); q.step = 3; saveData.miles = (saveData.miles | 0) + 1; trSave(); toPlace(r.area, r.x, r.y, 'THE SHADOW SCATTERS LIKE ASH ON THE WIND. YARDRAT IS SAFE. (CHAPTER 2 COMPLETE!)'); }
+    else toPlace(r.area, r.x, r.y, 'THE SHADOW LAUGHS WITH EVERY VOICE YOU HAVE EVER HEARD. TRAIN MORE. RETURN.');
+    return;
   }
   const q = questOf();
   if (win) { q.step = Math.max(q.step, 3); trSave(); toForest(505, 202, 'THE GIRL RUNS TO YOU. GO TELL HER BROTHER!'); }
@@ -2253,7 +2302,7 @@ const TOWNS = {
   oraya: { name: 'ORAYA CITY', kind: 'town', w: 700, h: 320, ground: '#8a8a94', path: '#b8b8c0', sky: ['#5a6a9a', '#a8b8d8'], deco: 'city', trees: '#4a8a5a', start: [40, 102],
     b: [['INN', 0, 0, '#3a5a9a', '#d8d8e0', 'inn'], ['CITY DINER', 1, 0, '#c07a30', '#ecdcc0', 'food'], ['GRAND ARENA', 2, 0, '#a02a2a', '#d8c8b0', 'rival'], ['MUSEUM', 3, 0, '#5a5a7a', '#e0e0e8', 'hut', { title: 'MUSEUM', npc: { name: 'CURATOR', body: '#604080', hair: '#c0c0c0', lines: ['THIS SPEAR BELONGED TO THE FIRST YARDRAT WARRIOR.', 'THE MASTER OF LUMORA AND THE CHAMPION OF ORAYA ONCE TRAINED TOGETHER.'] } }],
       ['GUILD', 4, 0, '#2a5a8a', '#d0d8e0', 'hut', { title: 'FIGHTERS GUILD', npc: { quest: 'oraya', name: 'GUILD CLERK', body: '#2060a0', hair: '#303030', lines: ['THE RIVAL FIGHTS EVERY CHALLENGER IN THE GRAND ARENA.', 'HE IS PROUD AND ANGRY. HE GETS STRONGER WHEN HE IS HURT.'] } }],
-      ['TOWER', 5, 0, '#6a2a5a', '#d8c8d8', 'hut', { title: 'TOWER', npc: { name: 'ASTRONOMER', body: '#4a3a8a', hair: '#f0f0f0', lines: ['THE STARS OVER YARDRAT ARE CHANGING.', 'SOMETHING IS COMING. I CAN SEE IT IN THE SKY.'] } }],
+      ['TOWER', 5, 0, '#6a2a5a', '#d8c8d8', 'hut', { title: 'TOWER', npc: { name: 'ASTRONOMER', body: '#4a3a8a', hair: '#f0f0f0', ch2: true, lines: ['THE STARS OVER YARDRAT ARE CHANGING.', 'SOMETHING IS COMING. I CAN SEE IT IN THE SKY.'] } }],
       ['MARKET', 0, 1, '#a04060', '#e0d0b8', 'hut', { title: 'CITY MARKET', npc: { name: 'MERCHANT', body: '#c08030', hair: '#403020', lines: ['GOODS FROM EVERY TOWN! FISH FROM MIRAKAI, BREAD FROM TAVORA!', 'A FIGHTER EATS WELL BEFORE THE ARENA.'] } }],
       ['HOUSE', 1, 1, '#5a7a9a', '#d8d8e0', 'hut', { title: 'CITY HOUSE', npc: { name: 'CITIZEN', body: '#607090', hair: '#503020', lines: ['THE ARENA IS LOUD ON TOURNAMENT DAY.', 'I BET ON THE RIVAL. HE NEVER GIVES UP!'] } }]],
     people: [PL('CITIZEN', '#607090', '#503020', 'r0', ['WELCOME TO ORAYA CITY!', 'THE ARENA IS THE HEART OF THE CITY.']), PL('GUARD', '#a04030', '#303030', 'r1', ['NO TROUBLE IN THE CITY.', 'THE RIVAL WAITS IN THE GRAND ARENA.']), PL('KID', '#40a060', '#202020', 'r0', ['I WANT TO BE THE CHAMPION!', 'THE RIVAL IS SO COOL!'], { small: true }), PL('DOG', '#c8a080', '#c8a080', 'r1', ['WOOF!'], { dog: true }), PL('MERCHANT', '#c08030', '#403020', 'r1', ['BUY LOW, SELL HIGH! (I HAVE NOTHING TO SELL YET.)', 'MONEY COMES LATER. FOOD COMES FIRST.'])],
@@ -2413,9 +2462,9 @@ function enterHut(b) {
 const GUARD_LINES = {
   master: ['MASTER: SIT. BREATHE. NOW SHOW ME YOUR SPIRIT. (DUEL: COSTS TIME)', 'BEGIN. AND DO NOT LIE TO YOURSELF.'],
   rival: ['RIVAL: ANOTHER CHALLENGER? I WILL CRUSH YOU! (DUEL: COSTS TIME)', 'COME AT ME WITH EVERYTHING!'],
-  frostguard: ['FROST RAIDER: YOU WANT THROUGH? BEAT ME FIRST. (DUEL: COSTS TIME)', 'THE COLD DOES NOT FORGIVE MISTAKES!'],
-  duneraider: ['DUNE RAIDER: THESE SANDS ARE MINE, OUTSIDER! (DUEL: COSTS TIME)', 'RUN WHILE YOU CAN!'],
-  embersmith: ['EMBER SMITH: FORGED IN FIRE, I DO NOT BREAK. (DUEL: COSTS TIME)', 'FEEL THE HEAT OF THE FORGE!'] };
+  frostguard: ['FROST RAIDER: YOU WANT THROUGH? BEAT ME FIRST. (DUEL: COSTS TIME)', 'THE COLD DOES NOT FORGIVE MISTAKES!', 'THE FROST RAIDER KNEELS IN THE SNOW.'],
+  duneraider: ['DUNE RAIDER: THESE SANDS ARE MINE, OUTSIDER! (DUEL: COSTS TIME)', 'RUN WHILE YOU CAN!', 'THE DUNE RAIDER COLLAPSES INTO THE SAND.'],
+  embersmith: ['EMBER SMITH: FORGED IN FIRE, I DO NOT BREAK. (DUEL: COSTS TIME)', 'FEEL THE HEAT OF THE FORGE!', 'THE EMBER SMITH\'S FIRE GOES OUT.'] };
 function duelStart(who) {
   const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); vMsg = who === 'master' ? 'THE MASTER SLEEPS. COME BACK TOMORROW.' : 'THIS FIGHTER IS ASLEEP. COME BACK TOMORROW.'; return; }
   t.sessions = Math.max(0, t.sessions - 1); trSave(); foeReturn = { area, x: vx, y: vy };
@@ -2871,6 +2920,10 @@ function missionList() {
   add('master', 'MAIN', 'SPIRIT MASTER', tech.indexOf('steady') >= 0 ? 2 : vis.lumora ? 1 : 0, 'DUEL THE MASTER IN THE SPIRIT TEMPLE IN LUMORA.');
   add('rival', 'MAIN', 'THE RIVAL', saveData.rivalDone ? 2 : vis.oraya ? 1 : 0, 'BEAT THE RIVAL IN THE GRAND ARENA IN ORAYA CITY.');
   add('guild', 'MAIN', 'CHAMPION OF YARDRAT', questState('oraya'), questReady('oraya') ? 'GO TO THE GUILD CLERK IN ORAYA.' : 'BEAT THE MASTER AND THE RIVAL. THEN SEE THE GUILD CLERK.');
+  { const c2 = ch2Of(), shards = ['frost', 'dune', 'ember'].filter(k => c2[k]).length;
+    add('shadow', 'MAIN', 'THE SHADOW OF YARDRAT', c2.step >= 3 ? 2 : c2.step >= 1 ? 1 : 0,
+      c2.step === 2 ? 'ENTER THE RIFT BEHIND THE GRAND ARENA IN ORAYA.' : 'DEFEAT THE GUARDIANS AT FROSTHAVEN, SUNKARA AND EMBERPEAK. SHARDS ' + shards + '/3.',
+      c2.step === 2 ? 'ENTER THE RIFT' : 'SHARDS ' + shards + '/3'); }
   add('cook', 'SIDE', 'GOLDEN RAMEN', q2Of().step, 'CATCH A GOLD FISH AT THE LAKE. GIVE IT TO THE RAMEN COOK.', 'GOLD FISH FOR THE COOK');
   add('friend', 'SIDE', 'BEST FRIENDS', q.step >= 4 ? (bondOf().boy >= 5 ? 2 : 1) : 0, 'TALK, GIVE FISH AND SPAR WITH THE BOY. BOND ' + bondOf().boy + '/5.', 'BEST FRIENDS ' + bondOf().boy + '/5');
   Object.keys(QM).forEach(id => { const st = questState(id), r = questReady(id); add(id, 'SIDE', QM[id][0], st, r ? 'DONE! GO TO ' + QM[id][2] + '.' : QM[id][1] + (id === 'lumora' ? ' (' + Math.min(3, saveData.meditations | 0) + '/3)' : ''), QM[id][0] + (r ? ': TURN IN' : '')); });
@@ -3105,7 +3158,8 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   trApplyTest(stat) { const t = trainOf(); trApply(stat, GRAV[t.grav]); }, get trMsg() { return trMsg; },
   allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); },
   npcSayTest(name, lines, n) { const p = { name, lines: lines.slice(), line: 0 }; const out = []; for (let i = 0; i < n; i++) out.push(npcSay(p)); return out; },
-  bondUpTest(w, n) { return bondUp(n, w); } };
+  bondUpTest(w, n) { return bondUp(n, w); }, ch2Talk() { ch2Talk({ ch2: true }); }, get ch2() { return saveData && saveData.ch2; },
+  forceWin() { over = 'win'; overT = 2; mode = 'over'; try { justSaved = recordFight('win'); } catch (e) {} press('ok'); } };
 requestAnimationFrame(frame);
 })();
 </script>
