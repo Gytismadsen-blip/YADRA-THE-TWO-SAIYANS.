@@ -2510,12 +2510,13 @@ function friendPick(m) {
 }
 
 // ================= coins, shops, ingredients, cooking (temporary Body/Focus buffs) =================
-const ING = { herb: { n: 'MOUNTAIN HERB', price: 10 }, root: { n: 'IRON ROOT', price: 10 }, honey: { n: 'WILD HONEY', price: 8 } };
+const ING = { herb: { n: 'MOUNTAIN HERB', price: 10 }, root: { n: 'IRON ROOT', price: 10 }, honey: { n: 'WILD HONEY', price: 8 }, spice: { n: 'GOLDEN SPICE', price: 22 } };
 const SELL = { small: 4, medium: 8, big: 16, gold: 40, meat: 12 };
 const DISHES = [
   { id: 'tea', n: 'HERB TEA', need: { herb: 1 }, buff: { focus: 2 }, fat: -10, meal: 0, short: 'HERB  FOCUS +2' },
   { id: 'stew', n: 'ROOT STEW', need: { root: 1 }, fish: true, buff: { body: 2 }, fat: 0, meal: 10, short: 'ROOT+FISH  BODY +2' },
-  { id: 'plate', n: 'WARRIOR PLATE', need: { root: 1, herb: 1, honey: 1 }, buff: { body: 2, focus: 2 }, fat: -15, meal: 15, short: 'ALL 3  BODY+FOCUS +2' }];
+  { id: 'plate', n: 'WARRIOR PLATE', need: { root: 1, herb: 1, honey: 1 }, buff: { body: 2, focus: 2 }, fat: -15, meal: 15, short: 'ALL 3  BODY+FOCUS +2' },
+  { id: 'feast', n: 'SPIRIT FEAST', need: { herb: 1, root: 1, honey: 1, spice: 1 }, fish: true, buff: { body: 3, focus: 3 }, fat: -20, meal: 25, short: 'ALL 4+FISH  BODY+FOCUS +3' }];
 function coinsOf() { trainOf(); return saveData.coins | 0; }
 function ingOf() { trainOf(); const g = saveData.ing || (saveData.ing = {}); Object.keys(ING).forEach(k => { g[k] = Math.max(0, g[k] | 0); }); return g; }
 function buffOf() { const t = trainOf(), b = saveData.buff; return b && b.day === t.day ? b : { day: t.day, body: 0, focus: 0 }; }
@@ -2526,7 +2527,7 @@ function shopTalk(p) {
   vAfterTalk = () => { vMenu = { idx: 1, kind: 'shop' }; };
 }
 function shopItems() {
-  const t = trainOf(), g = ingOf(), r = [{ act: 'info', n: 'COINS ' + coinsOf(), short: 'HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey }];
+  const t = trainOf(), g = ingOf(), r = [{ act: 'info', n: 'COINS ' + coinsOf(), short: 'HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey + ' SPICE ' + g.spice }];
   t.inv.forEach((k, i) => r.push({ act: 'sell', idx: i, n: 'SELL ' + FISH[k].n, short: '+' + SELL[k] + ' COINS' }));
   Object.keys(ING).forEach(k => r.push({ act: 'buy', k, n: 'BUY ' + ING[k].n, short: ING[k].price + ' COINS' }));
   return r;
@@ -2537,7 +2538,7 @@ function shopPick(m) {
   else if (m.act === 'buy') { if (coinsOf() < ING[m.k].price) { sfx('bad'); vMsg = 'NOT ENOUGH COINS.'; return; } saveData.coins = coinsOf() - ING[m.k].price; ingOf()[m.k]++; trSave(); sfx('ok'); vMsg = 'BOUGHT ' + ING[m.k].n + '.'; }
   else { sfx('move'); vMsg = 'SELL FISH. BUY INGREDIENTS. COOK AT HOME OR AT A CAMP.'; }
 }
-function cookItems() { const g = ingOf(); return [{ act: 'info', n: 'BAG HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey, short: '' }].concat(DISHES.map(d => ({ act: 'cook', d, n: d.n, short: d.short }))); }
+function cookItems() { const g = ingOf(); return [{ act: 'info', n: 'BAG HERB ' + g.herb + ' ROOT ' + g.root + ' HONEY ' + g.honey + ' SPICE ' + g.spice, short: '' }].concat(DISHES.map(d => ({ act: 'cook', d, n: d.n, short: d.short }))); }
 function cookPick(m) {
   const t = trainOf(), g = ingOf(); if (m.act !== 'cook') { sfx('move'); return; }
   const d = m.d; if (t.sessions <= 0) { sfx('bad'); vMsg = 'IT IS NIGHT. NO TIME TO COOK.'; return; }
@@ -3091,7 +3092,7 @@ function qMark(p) {
   if (p.side) { const st = sideSt(p.side), to = p.sideRole === 'to'; if (to ? st === 1 : (st === 0 || (st === 1 && SIDES[p.side].opts))) textS(to ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, to ? '#80ff80' : '#ffe060', 2); return; }
   if (!p.quest) return; const st = questState(p.quest), ready = st === 1 && questReady(p.quest); if (st === 0 || ready) textS(ready ? '?' : '!', Math.round(p.x) - 2, Math.round(p.y) - 38, ready ? '#80ff80' : '#ffe060', 2); }
 // ================= the bag: everything you carry =================
-const ING_USE = { herb: 'FOR HERB TEA: FOCUS', root: 'FOR ROOT STEW: BODY', honey: 'FOR THE WARRIOR PLATE' };
+const ING_USE = { herb: 'FOR HERB TEA: FOCUS', root: 'FOR ROOT STEW: BODY', honey: 'FOR THE WARRIOR PLATE', spice: 'FOR THE SPIRIT FEAST: BODY+FOCUS' };
 function toggleBag() {
   if (mode === 'bag') { mode = 'village'; sfx('move'); return; }
   if (mode === 'log') { mode = 'bag'; sfx('ok'); return; }
@@ -3455,6 +3456,7 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); },
   npcSayTest(name, lines, n) { const p = { name, lines: lines.slice(), line: 0 }; const out = []; for (let i = 0; i < n; i++) out.push(npcSay(p)); return out; },
   bondUpTest(w, n) { return bondUp(n, w); }, ch2Talk() { ch2Talk({ ch2: true }); }, get ch2() { return saveData && saveData.ch2; },
+  buyIng(k) { shopPick({ act: 'buy', k }); }, cookDish(id) { cookPick({ act: 'cook', d: DISHES.find(x => x.id === id) }); }, get ing() { return ingOf(); }, get buff() { return buffOf(); },
   enterGravityHall() { trainHall = true; toTrain('KESHIN HALL: GRAVITY UP TO 20X. WATCH YOUR STRAIN.'); }, setTrIdx(n) { trIdx = n; }, get did20x() { return !!(saveData && saveData.did20x); },
   forceWin() { over = 'win'; overT = 2; mode = 'over'; try { justSaved = recordFight('win'); } catch (e) {} press('ok'); } };
 requestAnimationFrame(frame);
