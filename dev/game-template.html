@@ -1849,11 +1849,19 @@ function vDog(x, y, body, step, face) {
   ctx.fillStyle = body; ctx.fillRect(X - 6, Y - 8 - bob, 10, 6); ctx.fillRect(X + (face > 0 ? 3 : -8), Y - 12 - bob, 5, 5); ctx.fillRect(X + (face > 0 ? -8 : 5), Y - 10 - bob, 3, 2);
   ctx.fillStyle = '#402010'; ctx.fillRect(X - 5, Y - 3, 2, 3); ctx.fillRect(X + 1, Y - 3, 2, 3); ctx.fillRect(X + (face > 0 ? 5 : -6), Y - 10 - bob, 1, 1);
 }
+const TREE_PAL = [['#1f5a2a', '#2f7a3a'], ['#173f22', '#245c2c'], ['#2a6a30', '#3f8a44'], ['#245030', '#356b3f']];
 function vTree(t) {
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(t.x - 8, t.y - 1, 16, 3);
-  ctx.fillStyle = '#6a4a2a'; ctx.fillRect(t.x - 2, t.y - 12, 4, 12);
-  ctx.fillStyle = '#1f5a2a'; ctx.fillRect(t.x - 10, t.y - 26, 20, 16); ctx.fillRect(t.x - 6, t.y - 32, 12, 8);
-  ctx.fillStyle = '#2f7a3a'; ctx.fillRect(t.x - 8, t.y - 24, 8, 6); ctx.fillRect(t.x - 4, t.y - 30, 6, 4);
+  // every tree is drawn the same way, but a per-position hash varies its size/colour/wobble
+  // so a dense wall of trees (route dead ends) reads as a forest, not a copy-pasted grid.
+  // NOTE: this only shifts pixels drawn - t.x/t.y stay the collision point, so blocked lanes stay blocked.
+  const h = Math.abs(Math.sin(t.x * 12.9898 + t.y * 78.233)) % 1;
+  const sc = .82 + h * .4, jx = Math.round((h - .5) * 5), jy = Math.round((((h * 53) % 1) - .5) * 3);
+  const x = t.x + jx, y = t.y + jy, pal = TREE_PAL[Math.floor(h * TREE_PAL.length) % TREE_PAL.length];
+  const R = (dx, dy, ww, hh) => ctx.fillRect(Math.round(x + dx * sc), Math.round(y + dy * sc), Math.max(1, Math.round(ww * sc)), Math.max(1, Math.round(hh * sc)));
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; R(-8, -1, 16, 3);
+  ctx.fillStyle = '#6a4a2a'; R(-2, -12, 4, 12);
+  ctx.fillStyle = pal[0]; R(-10, -26, 20, 16); R(-6, -32, 12, 8);
+  ctx.fillStyle = pal[1]; R(-8, -24, 8, 6); R(-4, -30, 6, 4);
 }
 function vSign(s) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 1, s.y - 12, 3, 12); ctx.fillStyle = '#c8a060'; ctx.fillRect(s.x - 8, s.y - 20, 16, 10); ctx.fillStyle = '#6a4a2a'; ctx.fillRect(s.x - 5, s.y - 16, 10, 2); }
 function drawPeopleAndPlayer(extra) {
