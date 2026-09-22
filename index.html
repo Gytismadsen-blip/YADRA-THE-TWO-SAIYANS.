@@ -1823,7 +1823,7 @@ const V_PEOPLE = [
   { name: 'GRANNY', body: '#b060a0', hair: '#e0e0e0', zone: [190, 206, 320, 300], lines: ['IN MY DAY WE TRAINED WITH ROCKS ON OUR BACKS.', 'YOU REMIND ME OF SOMEONE. HE ALSO LOST TO ROKU.'] },
   { name: 'SISTER', role: 'sister', hidden: true, body: '#e0a0a0', hair: '#804020', zone: [180, 166, 226, 196], lines: ['THANK YOU FOR SAVING ME!', 'THE FOREST WAS SCARY. BUT THEN YOU CAME.'] },
   { name: 'TRAVELER', body: '#607080', hair: '#804020', zone: [340, 104, 600, 118], lines: ['I AM WALKING TO THE FOREST GATE. THEY SAY IT OPENS SOON.', 'STRONG FIGHTERS LIVE BEYOND THE GATE.'] }];
-const V_TIPS = ['A WILD BOAR ROAMS THE FOREST. FOLLOW ITS TRACKS WITH SPIRIT SENSE. HIT IT HARD BEFORE IT RUNS!', 'CATCH FISH AT THE LAKE DOCK. GRILL THEM AT THE RAMEN HOUSE. IT IS FREE.', 'SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
+const V_TIPS = ['A WILD BOAR ROAMS THE FOREST. TRACK IT WITH SPIRIT SENSE, THEN HIT HARD!','CATCH FISH AT THE LAKE DOCK. GRILL THEM AT THE RAMEN HOUSE. IT IS FREE.', 'SLEEP IN YOUR OWN BED FOR A NEW DAY. YOU DO NOT NEED TO FIGHT ROKU FOR THAT.', 'ROKU READS YOU IF YOU REPEAT YOUR MOVES. MIX IT UP.', 'SPIRIT SENSE SHOWS HIS NEXT MOVE. BUT HE MAY LIE.', 'TOO MUCH STRAIN AND YOU COLLAPSE. GUARD LOWERS IT.', 'GRAVITY 10X IS FAST. BUT YOUR BODY PAYS FOR IT.', 'ROKU GETS ANGRY AT HALF LIFE. BE READY.', 'A CHARGE CAN BE BROKEN. DO NOT CHARGE WHEN HE READS YOU.'];
 const V_ELDER = { x: 205, y: 150 };
 let area = 'village', vx = 140, vy = 178, vFace = 1, vWalk = 0, vMsg = '', vMenuMsg = '', vTalk = '', vTip = 0, vFlash = 0, vMenu = null, vFade = 0, camX = 0, camY = 0;
 V_PEOPLE.forEach((p, i) => { p.x = (p.zone[0] + p.zone[2]) / 2; p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .7; p.face = 1; p.step = 0; p.line = 0; });
@@ -2238,7 +2238,8 @@ function drawVillage() {
   } else if (vMenu) {
     { const rows = vMenuMsg ? 2 : 3, items = menuItems(), st = Math.max(0, Math.min(items.length - rows, vMenu.idx - 1)); items.slice(st, st + rows).forEach((m, j) => { const i = st + j, y = 201 + j * 12, sel = i === vMenu.idx; if (sel) textS('>', 6, y, '#ffe060', 1); textS(m.n + (m.turns > 1 ? ' LONG' : '') + '  ' + m.short, 16 + (m.fish ? 0 : 0), y, sel ? '#ffe060' : (m.fish ? '#80e0ff' : '#ffffff'), 1); }); if (vMenuMsg) textS(vMenuMsg, 8, 201 + rows * 12, '#ffe060', 1); if (!touchMode) textS('X: BACK', CW - 52, 201, '#8888b0', 1); if (st > 0) textS('^', 306, 201, '#8888b0', 1); if (st + rows < items.length) textS('v', 306, 201 + (rows - 1) * 12 + 12, '#8888b0', 1); }
   } else if (vTalk) {
-    wrap(vTalk, 31).slice(0, 3).forEach((l, i) => textS(l, 8, 202 + i * 10, '#ffffff', 1));
+    const vLines = wrap(vTalk, 31); // a line's own text should always fit in 3 rows - this is just a safety net so a too-long line reads as "cut off on purpose" instead of a broken sentence
+    vLines.slice(0, 3).forEach((l, i) => textS(i === 2 && vLines.length > 3 ? l.slice(0, 27) + '...' : l, 8, 202 + i * 10, '#ffffff', 1));
     if (Math.floor(time * 3) % 2 === 0) textS('>', 304, 202, '#ffe060', 1);
   } else if (tg) {
     const p = tg === 'person' ? curPeople()[vNearPerson()] : null;
