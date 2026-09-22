@@ -956,7 +956,8 @@ function runAway() {
   if (foe.id === 'roku') { if (saveData) toVillage('ROKU: RUNNING AWAY? FINE. TRAIN, THEN COME BACK.'); else toTitle(); return; }
   if (foe.id === 'master' || foe.id === 'rival') { const r = foeReturn || { area: 'village', x: 140, y: 178 }; toPlace(r.area, r.x, r.y, foe.id === 'master' ? 'MASTER: RUNNING IS ALSO A LESSON. COME BACK.' : 'RIVAL: HA! RUN, COWARD! COME BACK WHEN YOU DARE!'); return; }
   if (foe.id === 'boar') { toForest(vx, vy, 'YOU RAN FROM THE BOAR. IT SNORTS AND GOES BACK TO THE WOODS.'); return; }
-  toForest(40, 140, 'YOU RAN FROM THE BANDITS. TRAIN, EAT, AND TRY AGAIN.');
+  { const r = foeReturn || { area: 'forest', x: 40, y: 140 }, line = 'YOU RAN FROM THE BANDITS. TRAIN, EAT, AND TRY AGAIN.';
+    if (r.area === 'forest') toForest(r.x, r.y, line); else toPlace(r.area, r.x, r.y, line); }
 }
 function whyNot(mv) {
   const M = C.CFG.moves[mv];
@@ -1606,8 +1607,8 @@ function villageUpdate(dt) {
   if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
   const near = vNearPerson(), nearP = curPeople()[near];
   if (area === 'forest' && !vTalk && vBanditT <= 0) { const bs = boarSpot(); if (bs && Math.hypot(vx - bs.x, vy - bs.y) < 34) { vTalk = 'A WILD BOAR BLOCKS THE TRAIL! IT SNORTS AND PAWS THE GROUND. (HUNT: COSTS TIME, STRAIN +8)'; vAfterTalk = fightBoar; vBanditT = 8; sfx('warn'); say(vTalk); } }
-  if (area === 'r1' && !vTalk && saveData && !saveData.r1Ambush && vx > 460 && vy > TOWNS.r1.forestBand[0] && vy < TOWNS.r1.forestBand[1]) { saveData.r1Ambush = 1; trSave(); vTalk = 'BANDITS JUMP OUT OF THE TREES! "THIS TRAIL HAS A TOLL NOW!"'; vAfterTalk = fightBandits; sfx('warn'); say(vTalk); }
-  if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
+  if (area === 'r1' && !vTalk && saveData && !saveData.r1Ambush && vx > 460 && vy > TOWNS.r1.forestBand[0] && vy < TOWNS.r1.forestBand[1]) { foeReturn = { area, x: vx, y: vy }; vTalk = 'BANDITS JUMP OUT OF THE TREES! "THIS TRAIL HAS A TOLL NOW!"'; vAfterTalk = fightBandits; sfx('warn'); say(vTalk); }
+  if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { foeReturn = { area, x: vx, y: vy }; vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
   const wl = area === 'village' ? V_PEOPLE : TOWNS[area] ? townPeople() : null;
   if (wl) wl.forEach((p, i) => { // wander, but stand still while you are close or talking
     if (p === nearP || vTalk || (p.hidden && questOf().step < 3)) return;
@@ -2087,6 +2088,12 @@ function foeAfter(win) { // called from the fight-over screen after a non-Roku f
     else toPlace(r.area, r.x, r.y, 'THE SHADOW LAUGHS WITH EVERY VOICE YOU HAVE EVER HEARD. TRAIN MORE. RETURN.');
     return;
   }
+  if (foe.id === 'bandit' && foeReturn && foeReturn.area === 'r1') { // the EAST ROAD ambush, not the Lost Sister rescue - must not touch that quest's state
+    const r = foeReturn;
+    if (win) { saveData.r1Ambush = 1; trSave(); toPlace(r.area, r.x, r.y, 'YOU DROVE OFF THE BANDITS. THE ROAD IS SAFER NOW.'); }
+    else toPlace(r.area, r.x, r.y, 'THEY BEAT YOU BACK. REST UP AND TRY AGAIN.');
+    return;
+  }
   const q = questOf();
   if (win) { q.step = Math.max(q.step, 3); trSave(); toForest(505, 202, 'THE GIRL RUNS TO YOU. GO TELL HER BROTHER!'); }
   else toForest(40, 140, 'THEY BEAT YOU. TRAIN, EAT, AND TRY AGAIN.');
@@ -2465,7 +2472,7 @@ Object.keys(ROUTE_DEF).filter(k => k !== 'r1').forEach(k => {
   T.laneMat = [{ color: laneShade(T.path, 1.15), name: 'RIVER PATH' }, { color: laneShade(T.path, 0.8), name: 'FOREST TRAIL' }];
   T.streets = [[zoneTop - 4, zoneBottom + 4], riverBand, forestBand];
   T.exits = [{ side: 'w', row: 0, to: 'forest' }, { side: 'e', row: 1, to: 'tavora' }, { side: 'e', row: 2, to: 'tavora' }];
-  T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS. RIVER PATH: SAFE BUT LONG. FOREST TRAIL: SHORT BUT HAS BANDITS.';
+  T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS. RIVER PATH: SAFE. FOREST TRAIL: BANDITS ROAM IT.';
   T.forkTrees = []; // no dead ends - both paths really lead on
 }
 // build layout: buildings, streets, walking zones, trees
@@ -2475,7 +2482,7 @@ Object.keys(TOWNS).forEach(k => {
   T.pp = T.people.map((p, i) => { const s = p.zone === 'r1' && T.streets[1] ? T.streets[1] : T.streets[0]; const capX = (T.kind === 'route' && T.forkX) ? T.forkX - 24 : T.w - 40; p.zone = [40, s[0] + 4, capX, s[1] - 2]; p.x = 60 + ((i * 131) % Math.max(40, capX - 100)); p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .6; p.face = 1; p.step = 0; p.line = 0; return p; });
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
-  const n = T.kind === 'route' ? 90 : 40;
+  const n = 40; // routes used to get more than double a town's tree count (90 vs 40) - way too dense, felt like a wall
   for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
   if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
