@@ -2334,7 +2334,7 @@ function bondOf() { trainOf(); const b = saveData.bond || (saveData.bond = { boy
 function openFoodMenu() { vMenu = { idx: 0, kind: 'food' }; }
 function cookTalk() {
   const q = q2Of(), t = trainOf(), gi = t.inv.indexOf('gold');
-  if (q.step === 0) { q.step = 1; trSave(); sfx('ok'); vTalk = 'COOK: I DREAM OF A GOLDEN RAMEN. BRING ME A GOLD FISH FROM THE LAKE! (QUEST STARTED)'; say(vTalk); vAfterTalk = openFoodMenu; }
+  if (q.step === 0) { sfx('ok'); offerQuest('COOK: I DREAM OF A GOLDEN RAMEN. BRING ME A GOLD FISH FROM THE LAKE! WILL YOU HELP?', () => { q.step = 1; trSave(); sfx('ok'); vTalk = 'COOK: WONDERFUL! FIND ME A GOLD FISH. (QUEST STARTED)'; say(vTalk); vAfterTalk = openFoodMenu; }, 'COOK: OH... COME BACK IF YOU CHANGE YOUR MIND.'); return; }
   else if (q.step === 1 && gi >= 0) { t.inv.splice(gi, 1); q.step = 2; trSave(); sfx('win'); vFlash = .4; vTalk = 'COOK: A GOLD FISH! WONDERFUL! (QUEST DONE: GOLDEN RAMEN ON THE MENU)'; say(vTalk); vAfterTalk = openFoodMenu; }
   else { sfx('ok'); if (q.step === 1) vMsg = 'QUEST: GOLD FISH FOR COOK'; openFoodMenu(); }
 }
@@ -3051,8 +3051,8 @@ function missionList() {
   trainOf(); const q = questOf(), vis = saveData.visited || {}, tech = saveData.tech || [], M = [];
   const add = (id, kind, title, st, goal, hud) => { if (st > 0) M.push({ id, kind, title, st, goal: st === 2 ? 'COMPLETED.' : goal, hud: hud || title }); };
   add('roku', 'MAIN', 'BEAT ROKU', saveData.wins > 0 ? 2 : 1, 'WIN A FIGHT AGAINST ROKU IN THE ARENA. TRAIN FIRST.', 'BEAT ROKU IN THE ARENA');
-  add('sister', 'MAIN', 'THE LOST SISTER', q.step >= 4 ? 2 : 1, q.step === 0 ? 'TALK TO THE BOY IN SORYA. HE HAS A YELLOW !.' : q.step === 3 ? 'TELL THE BOY HIS SISTER IS SAFE.' : cluesFound(q) < 3 ? 'SEARCH THE FOREST WITH SPIRIT SENSE. CLUES ' + cluesFound(q) + '/3.' : 'THE HIDDEN TRAIL IS OPEN. BEAT THE BANDITS.',
-    q.step === 0 ? 'TALK TO THE BOY' : q.step === 3 ? 'TELL THE BOY' : cluesFound(q) < 3 ? 'FIND HER. CLUES ' + cluesFound(q) + '/3' : 'BEAT THE BANDITS');
+  add('sister', 'MAIN', 'THE LOST SISTER', q.step >= 4 ? 2 : q.step >= 1 ? 1 : 0, q.step === 3 ? 'TELL THE BOY HIS SISTER IS SAFE.' : cluesFound(q) < 3 ? 'SEARCH THE FOREST WITH SPIRIT SENSE. CLUES ' + cluesFound(q) + '/3.' : 'THE HIDDEN TRAIL IS OPEN. BEAT THE BANDITS.',
+    q.step === 3 ? 'TELL THE BOY' : cluesFound(q) < 3 ? 'FIND HER. CLUES ' + cluesFound(q) + '/3' : 'BEAT THE BANDITS');
   add('master', 'MAIN', 'SPIRIT MASTER', tech.indexOf('steady') >= 0 ? 2 : vis.lumora ? 1 : 0, 'DUEL THE MASTER IN THE SPIRIT TEMPLE IN LUMORA.');
   add('rival', 'MAIN', 'THE RIVAL', saveData.rivalDone ? 2 : vis.oraya ? 1 : 0, 'BEAT THE RIVAL IN THE GRAND ARENA IN ORAYA CITY.');
   add('guild', 'MAIN', 'CHAMPION OF YARDRAT', questState('oraya'), questReady('oraya') ? 'GO TO THE GUILD CLERK IN ORAYA.' : 'BEAT THE MASTER AND THE RIVAL. THEN SEE THE GUILD CLERK.');
@@ -3284,7 +3284,9 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
   get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
-  routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; } };
+  routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },
+  missions() { return missionList().map(m => ({ id: m.id, kind: m.kind, title: m.title, st: m.st })); },
+  setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } } };
 requestAnimationFrame(frame);
 })();
 </script>
