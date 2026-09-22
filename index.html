@@ -1078,7 +1078,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', Delete:'del', c:'del', C:'del', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', b:'bag', B:'bag', v:'zoom', V:'zoom' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', b:'bag', B:'bag', v:'zoom', V:'zoom' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -1132,17 +1132,10 @@ function press(k) {
   }
 }
 // RUN AWAY: leave the fight. No win, no loss, no rewards. The time slot is already spent.
-// Roku gets one last hit in as you turn to run: it doesn't touch battle HP (that's discarded when you leave),
-// it adds Strain you carry into your NEXT fight (see fatigue/startStrain), so fleeing has a real cost.
 function runAway() {
   stopSpeech(); sfx('ok');
   if (saveData && curSlot >= 0) {
-    if (foe.id === 'roku') {
-      saveData.fled = (saveData.fled | 0) + 1;
-      const t = trainOf();
-      t.sessions = Math.max(0, t.sessions - 1); t.meal = 0;
-      t.fatigue = Math.min(99, t.fatigue + (R.form === 2 ? 26 : 18));
-    }
+    if (foe.id === 'roku') { saveData.fled = (saveData.fled | 0) + 1; const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.meal = 0; }
     saveData.savedAt = Date.now(); writeSlot(curSlot, saveData);
   }
   if (foe.id === 'roku') { if (saveData) toVillage('ROKU: RUNNING AWAY? FINE. TRAIN, THEN COME BACK.'); else toTitle(); return; }
@@ -1394,7 +1387,7 @@ function renderInner() {
 }
 
 // ================= main menu, 3 save slots, character creator, options, credits =================
-let titleIdx = 0, slotIdx = 0, slotPurpose = 'continue', slotConfirm = false, delConfirm = false, optIdx = 0, crRow = 0, cr = null, curSlot = -1, saveData = null, justSaved = false;
+let titleIdx = 0, slotIdx = 0, slotPurpose = 'continue', slotConfirm = false, optIdx = 0, crRow = 0, cr = null, curSlot = -1, saveData = null, justSaved = false;
 const TITLE_ITEMS = ['CONTINUE', 'NEW GAME', 'OPTIONS', 'CREDITS'];
 const SAVE_KEY = i => 'yadra_save_' + (i + 1);
 function cleanHero(h) {
@@ -1418,7 +1411,6 @@ function restorePos(d) {
 }
 addEventListener('pagehide', savePos); document.addEventListener('visibilitychange', () => { if (document.hidden) savePos(); });
 function writeSlot(i, d) { try { localStorage.setItem(SAVE_KEY(i), JSON.stringify(d)); return true; } catch (e) { return false; } }
-function deleteSlot(i) { try { localStorage.removeItem(SAVE_KEY(i)); } catch (e) {} }
 function anySave() { return [0, 1, 2].some(i => readSlot(i)); }
 function recordFight(win) { // progress is saved after every fight
   if (!saveData || curSlot < 0) return false;
@@ -1530,14 +1522,10 @@ function drawSlots() {
       textS('WINS ' + (d.wins || 0), x + 10, y + 110, '#a0e0a0', 1);
       textS('LOST ' + (d.losses || 0), x + 10, y + 121, '#e0a0a0', 1);
       textS(d.best ? 'BEST ' + d.best + ' TURNS' : 'NO WIN YET', x + 10, y + 132, '#c8c8e8', 1);
-      const armed = sel && delConfirm, blink = armed && Math.floor(time * 4) % 2 === 0;
-      const delTxt = armed ? 'DEL?' : 'DEL';
-      textS(delTxt, x + w - 6 - textW(delTxt), y + 8, blink ? '#ffffff' : '#ff6060', 1);
     } else textS('EMPTY', x + Math.round(w / 2 - textW('EMPTY') / 2), y + 70, '#555577', 1);
   }
-  if (delConfirm) center(touchMode ? 'TAP DEL AGAIN TO DELETE' : 'DELETE THIS SLOT?  C: YES  X: NO', 206, '#ff6060', 1);
-  else if (slotConfirm) center(touchMode ? 'TAP AGAIN TO OVERWRITE' : 'OVERWRITE THIS SLOT?  Z: YES  X: NO', 206, '#ff8080', 1);
-  else center(touchMode ? 'TAP A SLOT, DEL TO REMOVE' : 'LEFT/RIGHT + Z     X: BACK     C: DELETE', 206, '#8888b0', 1);
+  if (slotConfirm) center(touchMode ? 'TAP AGAIN TO OVERWRITE' : 'OVERWRITE THIS SLOT?  Z: YES  X: NO', 206, '#ff8080', 1);
+  else center(touchMode ? 'TAP A SLOT' : 'LEFT/RIGHT + Z     X: BACK', 206, '#8888b0', 1);
 }
 function drawCreator() {
   flatBg();
@@ -2537,15 +2525,41 @@ const BRANCHES = { r2: [{ x: 200, end: 262, kind: 'chest', id: 'r2a' }, { x: 430
   r5: [{ x: 280, end: 262, kind: 'cave', id: 'r5cave' }, { x: 440, end: 262, kind: 'camp', id: 'r5b' }], r6: [{ x: 320, end: 262, kind: 'hidden', id: 'sc_r6' }, { x: 140, end: 262, kind: 'chest', id: 'r6a' }], r7: [{ x: 300, end: 262, kind: 'chest', id: 'r7a' }],
   r9: [{ x: 260, end: 262, kind: 'camp', id: 'r9a' }], r10: [{ x: 300, end: 262, kind: 'hidden', id: 'sc_r10' }, { x: 120, end: 262, kind: 'chest', id: 'r10a' }], r11: [{ x: 250, end: 262, kind: 'chest', id: 'r11a' }], r13: [{ x: 300, end: 262, kind: 'camp', id: 'r13a' }] };
 Object.keys(BRANCHES).forEach(k => { TOWNS[k].h = 300; TOWNS[k].branches = BRANCHES[k]; });
+// ---------- route forks: every road splits into 3-5 paths (materials differ), only one continues on ----------
+function laneShade(hex, factor) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const cl = v => Math.max(0, Math.min(255, Math.round(v * factor)));
+  return '#' + [cl(r), cl(g), cl(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+const LANE_NAMES = ['PACKED DIRT PATH', 'LOOSE STONE PATH', 'SANDY TRAIL', 'MOSSY TRACK', 'OLD PLANK PATH'];
+const LANE_TINTS = [1, 0.68, 1.32, 0.85, 1.15];
+const ROUTE_FORKX = 380;
+Object.keys(ROUTE_DEF).forEach(k => {
+  const T = TOWNS[k], laneCount = T.branches ? 5 : 3, zoneTop = 70, zoneBottom = T.h === 300 ? 226 : 168, zoneH = zoneBottom - zoneTop;
+  const bandH = Math.floor((zoneH - (laneCount - 1) * 8) / laneCount), laneBands = [];
+  for (let i = 0; i < laneCount; i++) { const y0 = zoneTop + i * (bandH + 8); laneBands.push([y0, y0 + bandH]); }
+  const correct = (T.seed || 1) % laneCount;
+  T.forkX = ROUTE_FORKX; T.laneCount = laneCount; T.laneBands = laneBands; T.correctLane = correct; T.zoneTop = zoneTop; T.zoneBottom = zoneBottom;
+  T.laneMat = laneBands.map((b, i) => ({ color: laneShade(T.path, LANE_TINTS[i % LANE_TINTS.length]), name: LANE_NAMES[i % LANE_NAMES.length] }));
+  T.streets = [[zoneTop - 4, zoneBottom + 4]].concat(laneBands);
+  T.exits = T.exits.map(e => e.side === 'w' ? Object.assign({}, e, { row: 0 }) : Object.assign({}, e, { row: 1 + correct }));
+  if (T.signs && T.signs[1]) { T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS AHEAD. ' + laneCount + ' PATHS. ONLY ONE LEADS ON.'; }
+  laneBands.forEach((b, i) => { if (i === correct) return; T.signs.push({ x: T.w - 74, y: Math.round((b[0] + b[1]) / 2), text: 'DEAD END. THE ' + T.laneMat[i].name + ' LOOPS BACK. TRY ANOTHER ROAD.' }); });
+  T.forkTrees = [];
+  for (let i = 0; i < laneCount - 1; i++) { const gy = Math.round((laneBands[i][1] + laneBands[i + 1][0]) / 2); for (let x = ROUTE_FORKX + 14; x < T.w - 20; x += 8) T.forkTrees.push({ x, y: gy }); }
+  for (let x = ROUTE_FORKX + 14; x < T.w - 20; x += 8) { T.forkTrees.push({ x, y: zoneTop - 8 }); T.forkTrees.push({ x, y: zoneBottom + 8 }); }
+  laneBands.forEach((b, i) => { if (i === correct) return; for (let x = T.w - 54; x < T.w - 24; x += 8) for (let y = b[0]; y <= b[1]; y += 8) T.forkTrees.push({ x, y }); });
+});
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
   T.bl = T.b.map(sp => { const x0 = 30 + sp[1] * 104, y0 = sp[2] ? 150 : 40; return { label: sp[0], roof: sp[3], wall: sp[4], role: sp[5], extra: sp[6] || {}, style: styleFor(sp[0], sp[5], sp[6]), x0, y0, x1: x0 + 64, y1: y0 + 46, dx: x0 + 32 }; });
-  T.pp = T.people.map((p, i) => { const s = p.zone === 'r1' && T.streets[1] ? T.streets[1] : T.streets[0]; p.zone = [40, s[0] + 4, T.w - 40, s[1] - 2]; p.x = 60 + ((i * 131) % (T.w - 120)); p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .6; p.face = 1; p.step = 0; p.line = 0; return p; });
+  T.pp = T.people.map((p, i) => { const s = p.zone === 'r1' && T.streets[1] ? T.streets[1] : T.streets[0]; const capX = (T.kind === 'route' && T.forkX) ? T.forkX - 24 : T.w - 40; p.zone = [40, s[0] + 4, capX, s[1] - 2]; p.x = 60 + ((i * 131) % Math.max(40, capX - 100)); p.y = (p.zone[1] + p.zone[3]) / 2; p.tx = p.x; p.ty = p.y; p.wait = i * .6; p.face = 1; p.step = 0; p.line = 0; return p; });
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
   const n = T.kind === 'route' ? 90 : 40;
-  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > 84 && y < 130) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+  if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village';
 const southOpen = () => !!(saveData && saveData.wins > 0);
@@ -2852,7 +2866,10 @@ function drawTown() {
   rr(0, 0, T.w, 34, T.sky[0]); rr(0, 22, T.w, 12, T.sky[1]);
   ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < T.w; i += 90) ctx.fillRect(i, 26 - ((i / 90) % 3) * 3, 60, 10);
   rr(0, 34, T.w, T.h - 34, T.ground); ctx.fillStyle = 'rgba(255,255,255,.07)'; for (let i = 0; i < 120; i++) ctx.fillRect((i * 53) % (T.w - 6), 40 + ((i * 37) % (T.h - 44)), 3, 2);
-  T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
+  if (T.forkX) {
+    const s0 = T.streets[0]; rr(0, s0[0], T.forkX, s0[1] - s0[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.forkX; x += 10) ctx.fillRect(x, s0[0] + 3 + (x % 3) * 5, 3, 2);
+    T.laneMat.forEach((m, i) => { const s = T.streets[1 + i]; rr(T.forkX, s[0], T.w - T.forkX, s[1] - s[0], m.color); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = T.forkX + 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
+  } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
   if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
   if (T.deco === 'rocks') { ctx.fillStyle = '#5a5a58'; for (let i = 0; i < 9; i++) ctx.fillRect(20 + i * 62, T.h - 40 - (i % 3) * 12, 50, 40 + (i % 3) * 12); ctx.fillStyle = '#6a6a68'; for (let i = 0; i < 9; i++) ctx.fillRect(24 + i * 62, T.h - 40 - (i % 3) * 12, 20, 6); }
@@ -3109,24 +3126,18 @@ function menuPress(k) {
     else if (k === 'down') { titleIdx = (titleIdx + 1) % 4; sfx('move'); }
     else if (k === 'ok') {
       const it = TITLE_ITEMS[titleIdx];
-      if (it === 'CONTINUE') { if (!anySave()) { sfx('bad'); return true; } slotPurpose = 'continue'; slotIdx = [0, 1, 2].find(i => readSlot(i)); slotConfirm = false; delConfirm = false; mode = 'slots'; sfx('ok'); }
-      else if (it === 'NEW GAME') { slotPurpose = 'new'; slotIdx = 0; slotConfirm = false; delConfirm = false; mode = 'slots'; sfx('ok'); }
+      if (it === 'CONTINUE') { if (!anySave()) { sfx('bad'); return true; } slotPurpose = 'continue'; slotIdx = [0, 1, 2].find(i => readSlot(i)); slotConfirm = false; mode = 'slots'; sfx('ok'); }
+      else if (it === 'NEW GAME') { slotPurpose = 'new'; slotIdx = 0; slotConfirm = false; mode = 'slots'; sfx('ok'); }
       else if (it === 'OPTIONS') { optIdx = 0; mode = 'options'; sfx('ok'); }
       else { mode = 'credits'; sfx('ok'); }
     }
     return true;
   }
   if (mode === 'slots') {
-    if (k === 'left') { slotIdx = (slotIdx + 2) % 3; slotConfirm = false; delConfirm = false; sfx('move'); }
-    else if (k === 'right') { slotIdx = (slotIdx + 1) % 3; slotConfirm = false; delConfirm = false; sfx('move'); }
-    else if (k === 'back') { sfx('move'); if (slotConfirm) slotConfirm = false; else if (delConfirm) delConfirm = false; else toTitle(); }
-    else if (k === 'del') {
-      if (!readSlot(slotIdx)) { sfx('bad'); return true; }
-      if (!delConfirm) { delConfirm = true; slotConfirm = false; sfx('warn'); return true; }
-      deleteSlot(slotIdx); delConfirm = false; sfx('bad');
-    }
+    if (k === 'left') { slotIdx = (slotIdx + 2) % 3; slotConfirm = false; sfx('move'); }
+    else if (k === 'right') { slotIdx = (slotIdx + 1) % 3; slotConfirm = false; sfx('move'); }
+    else if (k === 'back') { sfx('move'); if (slotConfirm) slotConfirm = false; else toTitle(); }
     else if (k === 'ok') {
-      delConfirm = false;
       const d = readSlot(slotIdx);
       if (slotPurpose === 'continue') {
         if (!d) { sfx('bad'); return true; }
@@ -3207,17 +3218,7 @@ function drawBackBtn() {
     const x = c.x, y = c.y, inR = (rx, ry, rw, rh) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
     if (BACK_MODES.indexOf(mode) >= 0 && inR(0, 0, 48, 18)) { press('back'); return; }
     if (mode === 'title') { for (let i = 0; i < TITLE_ITEMS.length; i++) if (inR(6, 165 + i * 17, 230, 17)) { titleIdx = i; press('ok'); return; } }
-    else if (mode === 'slots') {
-      for (let i = 0; i < 3; i++) {
-        const bx = 14 + i * 102, by = 46;
-        if (readSlot(i) && inR(bx + 96 - 34, by, 34, 16)) { // small DEL tag, top-right of the card
-          if (slotIdx !== i || !delConfirm) { slotIdx = i; delConfirm = true; slotConfirm = false; sfx('warn'); }
-          else { deleteSlot(i); delConfirm = false; sfx('bad'); }
-          return;
-        }
-      }
-      for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; delConfirm = false; } press('ok'); return; }
-    }
+    else if (mode === 'slots') { for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; } press('ok'); return; } }
     else if (mode === 'creator') { for (let i = 0; i < 8; i++) if (inR(8, 27 + i * 22, 172, 19)) { crRow = i; if (i >= 1 && i <= 5) press(x < 62 ? 'left' : 'right'); else press('ok'); return; } }
     else if (mode === 'options') { for (let i = 0; i < 5; i++) if (inR(20, 26 + i * 22, 280, 20)) { optIdx = i; press('ok'); return; } }
     else if (mode === 'credits') press('ok');
@@ -3282,7 +3283,8 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
   get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
-  get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; } };
+  get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
+  routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; } };
 requestAnimationFrame(frame);
 })();
 </script>
