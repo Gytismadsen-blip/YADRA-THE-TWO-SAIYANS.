@@ -1720,7 +1720,7 @@ function trainPress(k) {
   if (k !== 'ok') return true;
   const it = TR_ITEMS[trIdx];
   if (it === 'FIGHT') { sfx('ok'); stopSpeech(); newGame({ line: t.fatigue >= 50 ? 'YOU LOOK TIRED, ' + hero.name + '. GOOD. I FIGHT WHEN YOU ARE WEAK.' : 'READY, ' + hero.name + '? SHOW ME WHAT YOU TRAINED.' }); return true; }
-  if (it === 'GRAVITY') { t.grav = (t.grav + 1) % (trainHall ? GRAV.length : 4); sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.'; return true; }
+  if (it === 'GRAVITY') { t.grav = (t.grav + 1) % (trainHall ? GRAV.length : 4); sfx('move'); trSave(); trMsg = 'GRAVITY ' + GRAV[t.grav].g + 'X. MORE POWER, MORE STRAIN.' + (GRAV[t.grav].g >= 20 && !saveData.did20x ? ' NOW PICK BODY, KI OR FOCUS TO TRAIN AT THIS LEVEL.' : ''); return true; }
   if (t.sessions <= 0) { sfx('bad'); trMsg = nightHint(); return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
@@ -1763,9 +1763,10 @@ function drawTrain() {
     TR_ITEMS.forEach((it, i) => {
       const c = i % 2, r = i >> 1, x = 14 + c * 152, y = 168 + r * 18, sel = i === trIdx;
       const full = (it === 'BODY' || it === 'KI' || it === 'FOCUS') && t[it.toLowerCase()] >= statCapOf(it.toLowerCase());
-      const off = (t.sessions <= 0 && it !== 'FIGHT' && it !== 'GRAVITY') || full;
+      const questPending = full && lv.g >= 20 && !saveData.did20x; // maxed, but still worth pressing: it earns the 20X GRAVITY quest
+      const off = (t.sessions <= 0 && it !== 'FIGHT' && it !== 'GRAVITY') || (full && !questPending);
       if (sel) textS('>', x - 4, y, '#ffe060', 2);
-      textS(it === 'GRAVITY' ? 'GRAV ' + lv.g + 'X' : it, x + 10, y, off ? '#666680' : (sel ? '#ffe060' : '#ffffff'), 2);
+      textS(it === 'GRAVITY' ? 'GRAV ' + lv.g + 'X' : it, x + 10, y, off ? '#666680' : questPending ? '#80ff80' : (sel ? '#ffe060' : '#ffffff'), 2);
     });
   }
   if (trFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + trFlash + ')'; ctx.fillRect(0, 26, W, 130); }
