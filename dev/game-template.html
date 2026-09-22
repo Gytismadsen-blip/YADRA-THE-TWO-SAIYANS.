@@ -899,6 +899,13 @@ cv.addEventListener('pointerdown', e => {
   if (rawY >= 196) return; // bottom info box, not the walkable area
   mouseGoTo = { x: rawX + camX, y: rawY + camY }; mouseStuckT = 0;
 });
+let wheelT = 0;
+cv.addEventListener('wheel', e => { // mouse wheel: scroll down = DOWN, scroll up = UP, same as the arrow keys
+  if (touchMode) return;
+  e.preventDefault();
+  const now = performance.now(); if (now - wheelT < 120) return; wheelT = now; // one step per notch, even on trackpads
+  initAudio(); press(e.deltaY > 0 ? 'down' : 'up');
+}, { passive: false });
 function toggleFullscreen() {
   const d = document.documentElement;
   try { if (document.fullscreenElement) document.exitFullscreen(); else (d.requestFullscreen || d.webkitRequestFullscreen).call(d); } catch (e) {}
