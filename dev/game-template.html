@@ -1393,7 +1393,7 @@ function drawCredits() {
 
 // ================= training: Body / Ki / Focus, gravity chamber, Body Strain carried into the fight =================
 const GRAV = [{ g: 1, gain: 1, fat: 3 }, { g: 3, gain: 1, fat: 7 }, { g: 5, gain: 2, fat: 14 }, { g: 10, gain: 3, fat: 26 }, { g: 20, gain: 4, fat: 45 }];
-const TR_ITEMS = ['BODY', 'REST', 'KI', 'GRAVITY', 'FOCUS', 'FIGHT'], STAT_MAX = 12;
+const TR_ITEMS = ['BODY', 'REST', 'KI', 'GRAVITY', 'FOCUS', 'FIGHT'], STAT_MAX = Infinity, BAR_REF = 12; // training never runs out of room; BAR_REF is only the bar/label's visual reference point
 let trIdx = 0, trMsg = '', trFlash = 0, trEvent = null, trEvIdx = 0;
 function trainOf() {
   if (!saveData) saveData = { v: 1, hero, wins: 0, losses: 0, fights: 0, best: 0 };
@@ -1404,7 +1404,7 @@ function trainOf() {
   return t;
 }
 function milestones() { return (saveData && saveData.wins > 0 ? 1 : 0) + (questOf().step >= 4 ? 1 : 0) + (q2Of().step >= 2 ? 1 : 0) + (bondOf().boy >= 5 ? 1 : 0) + ((saveData && saveData.miles) | 0); }
-function statCap() { return STAT_MAX; } // you can always train up to 12: time and strain are the limits, not milestones
+function statCap() { return STAT_MAX; } // no ceiling: time and strain are the limits, not a level cap
 function statCapOf(stat) { return Math.max(statCap(), (trainOf()[stat] | 0)); }
 function derived(t) { // what the training levels give you right now (uses the same numbers as the fight)
   C.setDifficulty('normal'); C.setStats({ body: t.body, ki: t.ki, focus: t.focus, tech: saveData && saveData.tech });
@@ -1487,7 +1487,7 @@ function drawTrain() {
   const D = derived(t);
   [['BODY', t.body, '#e0a040', 'HP ' + D.hp + '  STRIKE ' + D.strike], ['KI', t.ki, '#4090ff', 'BLAST ' + D.blast + '  LANCE ' + D.lance], ['FOCUS', t.focus, '#60e0c0', 'READ -' + D.read + '%  CRIT ' + D.crit + '%']].forEach((r, i) => {
     const y = 34 + i * 20;
-    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], STAT_MAX, r[2], { marks: [statCapOf(r[0].toLowerCase())] }); textS('LV ' + r[1] + '/' + statCapOf(r[0].toLowerCase()), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
+    textS(r[0], 116 + jx, y, '#ffffff', 1); bar(152 + jx, y + 1, 84, 6, r[1], Math.max(BAR_REF, r[1]), r[2]); textS('LV ' + r[1] + (r[1] < BAR_REF ? '/' + BAR_REF : ''), 242 + jx, y, r[2], 1); textS(r[3], 152 + jx, y + 9, '#a8a8c8', 1);
   });
   const fc = t.fatigue >= 75 ? '#ff3030' : t.fatigue >= 50 ? '#ffa020' : '#c8c840';
   textS('STRAIN', 116, 96, '#ffffff', 1); bar(152, 97, 84, 6, t.fatigue, 100, fc, { marks: [50, 75] }); textS(String(t.fatigue), 242, 96, fc, 1);
@@ -2859,7 +2859,7 @@ function drawBag() {
   textS(buffLine() || 'NO BUFF TODAY. COOK A DISH.', 12, 161, buffLine() ? '#80ff80' : '#8888a8', 1);
   head('TECHNIQUES', 174);
   const tech = (saveData.tech || []).map(k => TECHS[k]).filter(Boolean); textS(tech.length ? wrap(tech.join(', '), 50)[0] : 'NONE YET. DO THE TOWN MISSIONS.', 12, 187, tech.length ? '#ffffff' : '#8888a8', 1);
-  textS('BODY ' + t.body + '   KI ' + t.ki + '   FOCUS ' + t.focus + '   MAX ' + statCap(), 12, 203, '#c8f0c8', 1);
+  textS('BODY ' + t.body + '   KI ' + t.ki + '   FOCUS ' + t.focus, 12, 203, '#c8f0c8', 1);
   textS(touchMode ? 'TAP TOP RIGHT: LOG' : 'X: BACK  L: LOG', 8, 226, '#8888b0', 1);
 }
 // ================= mission log + missions without fighting (you choose HOW to solve them) =================

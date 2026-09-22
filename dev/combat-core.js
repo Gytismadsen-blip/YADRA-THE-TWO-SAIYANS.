@@ -46,7 +46,7 @@
   //   fatigue (0-80) = Body Strain you carry into the fight from over-training
   function setStats(st) {
     st = st || {};
-    const n = v => Math.max(0, Math.min(12, v | 0));
+    const n = v => Math.max(0, v | 0); // no cap: training keeps paying off past level 12
     const b = n(st.body), k = n(st.ki), fo = n(st.focus), fat = Math.max(0, Math.min(80, st.fatigue | 0));
     CFG.player.hp += CFG.train.hpPerBody * b + Math.max(0, Math.min(80, st.meal | 0)); CFG.strainDecay += CFG.train.decayPerBody * b;
     CFG.player.kiMax = 100 + CFG.train.kiPerKi * k; CFG.player.ki = CFG.player.kiMax; CFG.moves.lance.strain = Math.max(25, 45 - CFG.train.lanceStrainPerKi * k);
