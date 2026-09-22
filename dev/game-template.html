@@ -1368,7 +1368,7 @@ function drawCreator() {
   const set = makeHeroSet(cr), fr = Math.floor(time * 2.2) % 2 ? 'idle1' : 'idle0', sc = 2, bob = Math.round(Math.sin(time * 3));
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(cxm - 16), py + ph - 8, 32, 4);
   ctx.drawImage(set.img[fr], Math.round(cxm - set.w * sc / 2), py + ph - 6 - set.h * sc + sc + bob, set.w * sc, set.h * sc);
-  textS(touchMode ? 'TAP A ROW. LEFT PART = BACK ONE.' : 'ARROWS   Z: OK   ESC: BACK', 8, 226, '#8888b0', 1);
+  textS(touchMode ? 'TAP A ROW. LEFT PART = BACK ONE.' : crRow === 0 ? 'TYPE NAME.   DOWN: NEXT' : 'ARROWS   Z: OK   ESC: BACK', 8, 226, '#8888b0', 1);
 }
 function drawOptions() {
   flatBg(); center('OPTIONS', 10, '#ffd040', 2);
