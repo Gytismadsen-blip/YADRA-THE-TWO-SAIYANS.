@@ -1155,7 +1155,7 @@ cv.addEventListener('pointerdown', e => {
   const rawX = x + (mode === 'village' ? CW - W : OFFX), rawY = y;
   if (mode === 'village' && rawY < 20 && rawX > CW - 70) { press('map'); return; }
   if (mode === 'village' && rawY < 20 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) { press('log'); return; }
-  if (mode !== 'village') return; // menus/fights: keyboard only for now, this is just world click-to-move
+  if (mode !== 'village') { tapAt(canvasXY2(e)); return; } // menus, title, training, fights, shops: click rows just like a tap
   if (vTalk) { press('ok'); return; }
   if (vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? (rawY >= 198 + i * 19 && rawY <= 198 + i * 19 + 19) : (rawY >= 199 + i * 13 && rawY <= 199 + i * 13 + 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } return; }
   if (vMenu || vFish) return; // food/friend/shop/cook menus and fishing: keyboard only for now
@@ -3367,6 +3367,37 @@ function drawBackBtn() {
   ctx.fillStyle = 'rgba(10,10,40,.92)'; ctx.fillRect(2, 2, bw, 14); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(2, 2, bw, 1); ctx.fillRect(2, 15, bw, 1); ctx.fillRect(2, 2, 1, 14); ctx.fillRect(bw + 1, 2, 1, 14);
   textS(label, 7, 6, '#ffe060', 1);
 }
+// shared by mouse (desktop) and touch: turn a canvas click/tap into a menu action
+const canvasXY2 = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - (mode === 'village' ? 0 : OFFX), y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
+// tap/click a menu row: first tap selects it, tapping the same row again confirms
+function tapAt(c) {
+  if (!c.inside) return;
+  const x = c.x, y = c.y, inR = (rx, ry, rw, rh) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
+  if (BACK_MODES.indexOf(mode) >= 0 && inR(0, 0, 48, 18)) { press('back'); return; }
+  if (mode === 'title') { for (let i = 0; i < TITLE_ITEMS.length; i++) if (inR(6, 165 + i * 17, 230, 17)) { titleIdx = i; press('ok'); return; } }
+  else if (mode === 'slots') { for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; } press('ok'); return; } }
+  else if (mode === 'creator') { for (let i = 0; i < 8; i++) if (inR(8, 27 + i * 22, 172, 19)) { crRow = i; if (i >= 1 && i <= 5) press(x < 62 ? 'left' : 'right'); else press('ok'); return; } }
+  else if (mode === 'options') { for (let i = 0; i < 5; i++) if (inR(20, 26 + i * 22, 280, 20)) { optIdx = i; press('ok'); return; } }
+  else if (mode === 'credits') press('ok');
+  else if (mode === 'train') { for (let i = 0; i < TR_ITEMS.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(8 + cc * 152, 166 + rr * 18, 146, 18)) { trIdx = i; press('ok'); return; } } }
+  else if (mode === 'tevent') { for (let i = 0; i < 2; i++) if (inR(6, 186 + i * 17, 300, 17)) { trEvIdx = i; press('ok'); return; } }
+  else if (mode === 'map') {
+    if (y < 14 && x > W - 90) { press('zoom'); return; }
+    const xf = mapXf(); let hit = null, hd = 18;
+    mapKnown().concat(Object.keys(MAP_NODES).filter(k => !mapVisited()[k] && MAP_EDGES.some(e => (e[0] === k && mapVisited()[e[1]]) || (e[1] === k && mapVisited()[e[0]])))).forEach(k => { const q = mapNodeXY(k, xf), d = Math.hypot(q.x - x, q.y - y); if (d < hd) { hd = d; hit = k; } });
+    if (hit) { if (mapSel === hit) press('ok'); else { mapSel = hit; mapMsg = ''; sfx('move'); } }
+  }
+  else if (mode === 'menu') {
+    if (state.p.collapsed) { press('ok'); return; }
+    for (let i = 0; i <= MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
+  }
+  else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
+  else if (mode === 'village' && (vMenu || vChoice) && y >= 15 && y <= 32 && x > CW - 70) { press('back'); }
+  else if (mode === 'village' && vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? inR(2, 198 + i * 19, CW - 4, 19) : inR(2, 199 + i * 13, CW - 4, 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
+  else if (mode === 'bag' || (mode === 'log' && y < 14 && x > W - 70)) { if (y < 14 && x > W - 70) press(mode === 'log' ? 'bag' : 'log'); }
+  else if (mode === 'log') { const rows = logRows(); for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) if (inR(2, 21 + i * 14, W - 4, 14)) { if (logSel === logTop + i) press('ok'); else { logSel = logTop + i; sfx('move'); } return; } }
+  else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
+}
 (function setupTouch() {
   const isT = params.get('touch') === '1' || (window.matchMedia && matchMedia('(pointer: coarse)').matches);
   if (!isT) return;
@@ -3375,37 +3406,8 @@ function drawBackBtn() {
   const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
   let jid = null, ox = 0, oy = 0;
   const clearHeld = () => { held.left = held.right = held.up = held.down = false; };
-  const canvasXY = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - (mode === 'village' ? 0 : OFFX), y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
+  const canvasXY = canvasXY2;
   const worldMode = () => mode === 'village' && !vTalk && !vMenu && !vChoice;
-  // tap a menu row: first tap selects it, tapping the same row again confirms
-  function tapAt(c) {
-    if (!c.inside) return;
-    const x = c.x, y = c.y, inR = (rx, ry, rw, rh) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
-    if (BACK_MODES.indexOf(mode) >= 0 && inR(0, 0, 48, 18)) { press('back'); return; }
-    if (mode === 'title') { for (let i = 0; i < TITLE_ITEMS.length; i++) if (inR(6, 165 + i * 17, 230, 17)) { titleIdx = i; press('ok'); return; } }
-    else if (mode === 'slots') { for (let i = 0; i < 3; i++) if (inR(14 + i * 102, 46, 96, 148)) { if (slotIdx !== i) { slotIdx = i; slotConfirm = false; } press('ok'); return; } }
-    else if (mode === 'creator') { for (let i = 0; i < 8; i++) if (inR(8, 27 + i * 22, 172, 19)) { crRow = i; if (i >= 1 && i <= 5) press(x < 62 ? 'left' : 'right'); else press('ok'); return; } }
-    else if (mode === 'options') { for (let i = 0; i < 5; i++) if (inR(20, 26 + i * 22, 280, 20)) { optIdx = i; press('ok'); return; } }
-    else if (mode === 'credits') press('ok');
-    else if (mode === 'train') { for (let i = 0; i < TR_ITEMS.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(8 + cc * 152, 166 + rr * 18, 146, 18)) { trIdx = i; press('ok'); return; } } }
-    else if (mode === 'tevent') { for (let i = 0; i < 2; i++) if (inR(6, 186 + i * 17, 300, 17)) { trEvIdx = i; press('ok'); return; } }
-    else if (mode === 'map') {
-      if (y < 14 && x > W - 90) { press('zoom'); return; }
-      const xf = mapXf(); let hit = null, hd = 18;
-      mapKnown().concat(Object.keys(MAP_NODES).filter(k => !mapVisited()[k] && MAP_EDGES.some(e => (e[0] === k && mapVisited()[e[1]]) || (e[1] === k && mapVisited()[e[0]])))).forEach(k => { const q = mapNodeXY(k, xf), d = Math.hypot(q.x - x, q.y - y); if (d < hd) { hd = d; hit = k; } });
-      if (hit) { if (mapSel === hit) press('ok'); else { mapSel = hit; mapMsg = ''; sfx('move'); } }
-    }
-    else if (mode === 'menu') {
-      if (state.p.collapsed) { press('ok'); return; }
-      for (let i = 0; i <= MENU.length; i++) { const cc = i % 2, rr = i >> 1; if (inR(6 + cc * 92, 167 + rr * 16, 92, 16)) { if (menuIdx === i) press('ok'); else { menuIdx = i; curInfoMsg = ''; sfx('move'); } return; } }
-    }
-    else if (mode === 'anim' || mode === 'intro' || mode === 'over') press('ok');
-    else if (mode === 'village' && (vMenu || vChoice) && y >= 15 && y <= 32 && x > CW - 70) { press('back'); }
-    else if (mode === 'village' && vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? inR(2, 198 + i * 19, CW - 4, 19) : inR(2, 199 + i * 13, CW - 4, 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } }
-    else if (mode === 'bag' || (mode === 'log' && y < 14 && x > W - 70)) { if (y < 14 && x > W - 70) press(mode === 'log' ? 'bag' : 'log'); }
-    else if (mode === 'log') { const rows = logRows(); for (let i = 0; i < LOG_VIS && logTop + i < rows.length; i++) if (inR(2, 21 + i * 14, W - 4, 14)) { if (logSel === logTop + i) press('ok'); else { logSel = logTop + i; sfx('move'); } return; } }
-    else if (mode === 'village' && vMenu) { const items = menuItems(), st = Math.max(0, Math.min(items.length - 3, vMenu.idx - 1)); for (let j = 0; j < 3 && st + j < items.length; j++) if (inR(2, 199 + j * 12, CW - 40, 12)) { if (vMenu.idx === st + j) press('ok'); else { vMenu.idx = st + j; sfx('move'); } return; } }
-  }
   addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && params.get('touch') !== '1') return;
     e.preventDefault(); initAudio();
