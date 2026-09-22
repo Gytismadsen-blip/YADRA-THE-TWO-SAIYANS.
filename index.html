@@ -3138,7 +3138,7 @@ function drawBag() {
   Object.keys(ING).forEach((k, i) => { textS(ING[k].n + '  x' + g[k], 12, 105 + i * 10, g[k] ? '#ffffff' : '#8888a8', 1); textS(ING_USE[k], 150, 105 + i * 10, '#a8c8e8', 1); });
   let by = 105 + Object.keys(ING).length * 10 + 3; // sections below stack from here, so adding an ingredient can't run the header into the last row again
   head('FOOD AND BUFF', by); by += 13;
-  textS(t.meal ? 'FED: +' + t.meal + ' HP IN THE NEXT FIGHT' : 'NOT FED. EAT BEFORE A FIGHT.', 12, by, t.meal ? '#ffb060' : '#8888a8', 1); by += 10;
+  textS(t.meal ? 'FED: +' + t.meal + ' HP IN THE NEXT FIGHT' : 'NOT FED. SOUP LOWERS STRAIN, BUT ISN\'T A MEAL.', 12, by, t.meal ? '#ffb060' : '#8888a8', 1); by += 10;
   textS(buffLine() || 'NO BUFF TODAY. COOK A DISH.', 12, by, buffLine() ? '#80ff80' : '#8888a8', 1); by += 13;
   head('TECHNIQUES', by); by += 13;
   const tech = (saveData.tech || []).map(k => TECHS[k]).filter(Boolean); textS(tech.length ? wrap(tech.join(', '), 50)[0] : 'NONE YET. DO THE TOWN MISSIONS.', 12, by, tech.length ? '#ffffff' : '#8888a8', 1); by += 16;
