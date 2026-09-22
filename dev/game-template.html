@@ -2474,14 +2474,14 @@ Object.keys(ROUTE_DEF).filter(k => k !== 'r1').forEach(k => {
   T.southBranch = { x0: 180, x1: 220 }; // a real T-junction before the river/forest fork: straight on to Tavora, or south to Elmvale
   T.exits = [{ side: 'w', row: 0, to: 'forest' }, { side: 'e', row: 1, to: 'tavora' }, { side: 'e', row: 2, to: 'tavora' }, { side: 's', xRange: [180, 220], to: 'elmpath' }];
   T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS. RIVER PATH: SAFE. FOREST TRAIL: BANDITS ROAM IT.';
-  T.signs.push({ x: 200, y: 150, text: 'SOUTH: THE OLD TRAIL TO ELMVALE.' });
+  T.signs.push({ x: 200, y: 150, text: 'JUNCTION. WEST: THE FOREST. EAST: TAVORA. SOUTH: THE OLD TRAIL TO ELMVALE.' });
   T.forkTrees = []; // no dead ends - both paths really lead on
 }
 TOWNS.elmpath = { // OLD ELM TRAIL: a narrow, short link from the EAST ROAD junction to Elmvale, so Elmvale no longer requires a trip through Tavora first
   name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[96, 112]], start: [30, 104],
   b: [], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'elmvale' }],
   people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['FEW USE THIS TRAIL NOW.', 'ELMVALE IS JUST AHEAD.'])],
-  signs: [{ x: 22, y: 104, text: 'NORTH: BACK TO THE EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }] };
+  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }] };
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2490,7 +2490,7 @@ Object.keys(TOWNS).forEach(k => {
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
   const n = 40; // routes used to get more than double a town's tree count (90 vs 40) - way too dense, felt like a wall
-  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > T.streets[0][0] - 14 && y < T.streets[0][1] + 14) || (T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
   if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village', optionsReturn = null;
@@ -2743,7 +2743,7 @@ function buildWorldMap() {
   g.fillStyle = '#e04a20'; g.fillRect(104, 506, 12, 8); g.fillStyle = '#ffb030'; g.fillRect(108, 504, 4, 3);
   return cv2;
 }
-function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
+function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : area === 'elmpath' ? 'elmvale' : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
 function mapPathPt(a, b, u) { // a point along the elbow road between two places
   const A = MAP_NODES[a], B = MAP_NODES[b], hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y), M = hor ? { x: B.x, y: A.y } : { x: A.x, y: B.y };
   const l1 = Math.hypot(M.x - A.x, M.y - A.y), l2 = Math.hypot(B.x - M.x, B.y - M.y), d = Math.max(0, Math.min(1, u)) * (l1 + l2);
@@ -2752,6 +2752,7 @@ function mapPathPt(a, b, u) { // a point along the elbow road between two places
 function mapYou() { // your real position: in a town, or somewhere along the road between two towns
   if (area === 'village') return MAP_NODES.village; if (TOWNS[area] && TOWNS[area].kind === 'town') return MAP_NODES[area];
   if (area === 'forest') return mapPathPt('village', 'tavora', .25);
+  if (area === 'elmpath') return mapPathPt('village', 'elmvale', Math.max(0, Math.min(1, vx / TOWNS.elmpath.w)));
   if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return mapPathPt(a, d[2], (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
   return MAP_NODES.village;
 }
