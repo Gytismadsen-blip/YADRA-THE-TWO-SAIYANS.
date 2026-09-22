@@ -1834,7 +1834,12 @@ function villageUpdate(dt) {
     if (p === nearP || vTalk || (p.hidden && questOf().step < 3)) return;
     if (p.wait > 0) { p.wait -= dt; return; }
     const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-    if (d < 2) { p.wait = 1 + Math.random() * 2.5; p.tx = p.zone[0] + Math.random() * (p.zone[2] - p.zone[0]); p.ty = p.zone[1] + Math.random() * (p.zone[3] - p.zone[1]); p.step = 0; return; }
+    if (d < 2) { // wander somewhere new, but not into a doorway - NPCs standing on top of an entrance was a real complaint (e.g. the Oraya arena)
+      p.wait = 1 + Math.random() * 2.5; const T = TOWNS[area]; let tx, ty, tries = 0;
+      do { tx = p.zone[0] + Math.random() * (p.zone[2] - p.zone[0]); ty = p.zone[1] + Math.random() * (p.zone[3] - p.zone[1]); tries++; }
+      while (T && T.bl.some(b => Math.abs(tx - b.dx) < 26 && ty > b.y1 && ty < b.y1 + 24) && tries < 8);
+      p.tx = tx; p.ty = ty; p.step = 0; return;
+    }
     const sp = (p.dog ? 34 : 22) * dt; p.x += dx / d * sp; p.y += dy / d * sp; p.step += dt * 8; if (Math.abs(dx) > 1) p.face = dx > 0 ? 1 : -1;
   });
   fishUpdate(dt);
@@ -2397,7 +2402,12 @@ function friendItems() {
   const t = trainOf(), b = bondOf(), w = vMenu && vMenu.who || 'boy';
   return [{ act: 'talk', n: 'TALK', short: 'BOND ' + b[w] + '/5' }, { act: 'give', n: 'GIVE A FISH', short: 'BAG ' + t.inv.length + '  BOND +1' }, { act: 'spar', n: 'SPAR', short: '1 TIME  +1 STAT' }, { act: 'fishtog', n: 'FISH TOGETHER', short: '1 TIME  +FISH' }];
 }
-function bondUp(n, w) { w = w || 'boy'; const b = bondOf(), before = b[w]; b[w] = Math.min(5, b[w] + n); return before < 5 && b[w] >= 5 ? (w === 'boy' ? ' (BEST FRIENDS!)' : ' (BEST FRIENDS!)') : ''; }
+function bondUp(n, w) { // bond level ups now give a real payoff, not just a bigger number
+  w = w || 'boy'; const b = bondOf(), before = b[w]; b[w] = Math.min(5, b[w] + n); let extra = '';
+  if (before < 3 && b[w] >= 3) { saveData.coins = (saveData.coins | 0) + 20; extra += w === 'boy' ? ' (THE BOY SHOWS YOU HIS SECRET HIDEOUT. +20 COINS.)' : ' (SHE TEACHES YOU A FISHING TRICK. +20 COINS.)'; }
+  if (before < 5 && b[w] >= 5) { saveData.coins = (saveData.coins | 0) + 50; extra += ' (BEST FRIENDS! +50 COINS.)'; }
+  return extra;
+}
 function friendPick(m) {
   const t = trainOf(), b = bondOf(), w = vMenu.who || 'boy', F = FR[w];
   if (m.act === 'talk') {
@@ -2775,9 +2785,15 @@ const MEM = {
   MINER: [[() => sideFlag('dispute') === 'lie', 'YOU TOOK THE MINER SIDE IN THE LIFT FIGHT. THE SMITH IS SULKING.'], [() => sideFlag('dispute') === 'truth', 'THE RUSTY CHAIN! EVERYONE KNOWS YOU FOUND IT.']],
   FISHER: [[() => (saveData.sold | 0) > 0, 'FISH SELL WELL IN TOWN. ASK THE MERCHANTS.']], MONK: [[() => (saveData.meditations | 0) >= 3, 'YOU MEDITATED WELL. THE HALL FEELS CALMER.']],
   CITIZEN: [[() => !!saveData.rivalDone, 'YOU BEAT THE RIVAL! THE WHOLE CITY TALKS ABOUT IT.']], TRAVELER: [[() => saveData.wins > 0, 'YOU BEAT ROKU? I SAW HIM SMILE. FIRST TIME.']],
-  SAILOR: [[() => sideFlag('harbor') === 'truth', 'THE LABEL MIX-UP! YOU CLEARED OUR NAMES.']], '*': [[() => (saveData.tech || []).length >= 3, 'YOU KNOW SO MANY TECHNIQUES! I SEE A TRUE FIGHTER.']] };
+  SAILOR: [[() => sideFlag('harbor') === 'truth', 'THE LABEL MIX-UP! YOU CLEARED OUR NAMES.']],
+  '*': [[() => (saveData.tech || []).length >= 3, 'YOU KNOW SO MANY TECHNIQUES! I SEE A TRUE FIGHTER.'],
+    [() => saveData.wins > 0, 'I HEARD SOMEONE BEAT ROKU IN THE ARENA. WAS THAT YOU?'],
+    [() => milestones() >= 2, 'YOU HAVE COME FAR, TRAVELLER. YARDRAT IS BIG.'],
+    [() => (saveData.tech || []).length >= 1, 'A REAL TECHNIQUE, NOT JUST TRAINING? RESPECT.'],
+    [() => bondOf().boy >= 3, 'THAT BOY IN SORYA VILLAGE WON\'T STOP TALKING ABOUT YOU.'],
+    [() => trainOf().day >= 5, 'STILL TRAVELLING AFTER ALL THESE DAYS? YOU DO NOT GIVE UP.']] };
 function npcSay(p) {
-  trainOf(); const rules = (MEM[p.name] || []).concat(MEM['*']).filter(r => r[0]);
+  trainOf(); const rules = (MEM[p.name] || []).concat(MEM['*']).filter(r => r[0]());
   let text; if (rules.length && p.line % 2 === 0) text = rules[(p.line >> 1) % rules.length][1]; else text = p.lines[p.line % p.lines.length]; p.line++;
   return (p.dog ? '' : p.name + ': ') + text;
 }
@@ -3352,7 +3368,9 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   missions() { return missionList().map(m => ({ id: m.id, kind: m.kind, title: m.title, st: m.st })); },
   setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } },
   trApplyTest(stat) { const t = trainOf(); trApply(stat, GRAV[t.grav]); }, get trMsg() { return trMsg; },
-  allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); } };
+  allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); },
+  npcSayTest(name, lines, n) { const p = { name, lines: lines.slice(), line: 0 }; const out = []; for (let i = 0; i < n; i++) out.push(npcSay(p)); return out; },
+  bondUpTest(w, n) { return bondUp(n, w); } };
 requestAnimationFrame(frame);
 })();
 </script>
