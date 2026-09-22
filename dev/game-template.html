@@ -895,7 +895,8 @@ cv.addEventListener('pointerdown', e => {
   if (mode !== 'village') { tapAt(canvasXY2(e)); return; } // menus, title, training, fights, shops: click rows just like a tap
   if (vTalk) { press('ok'); return; }
   if (vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? (rawY >= 198 + i * 19 && rawY <= 198 + i * 19 + 19) : (rawY >= 199 + i * 13 && rawY <= 199 + i * 13 + 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } return; }
-  if (vMenu || vFish) return; // food/friend/shop/cook menus and fishing: keyboard only for now
+  if (vMenu) { tapAt(canvasXY2(e)); return; } // food/friend/shop/cook menus: click a row just like a tap
+  if (vFish) return; // fishing has its own timing-based input: keyboard only for now
   if (rawY >= 196) return; // bottom info box, not the walkable area
   mouseGoTo = { x: rawX + camX, y: rawY + camY }; mouseStuckT = 0;
 });
