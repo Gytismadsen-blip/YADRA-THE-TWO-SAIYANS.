@@ -1145,8 +1145,10 @@ addEventListener('keydown', e => {
 });
 const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 }, BTN_F = { x: 138, y: 225, w: 52, h: 12 };
 let mouseGoTo = null, mouseStuckT = 0; // desktop: click the ground to walk there (keyboard still works and always overrides)
+cv.addEventListener('contextmenu', e => { if (!touchMode) e.preventDefault(); }); // right click is BACK, not the browser menu
 cv.addEventListener('pointerdown', e => {
   if (touchMode) return; // phones use the touch controls below
+  if (e.button === 2) { initAudio(); cv.focus(); press('back'); return; } // right click = X (back/cancel)
   initAudio(); cv.focus();
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
