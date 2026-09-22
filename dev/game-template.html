@@ -69,7 +69,7 @@ const clamp01 = u => Math.max(0, Math.min(1, u));
 function fit() {
   const touch = document.body.classList.contains('touch'), portrait = innerHeight > innerWidth;
   document.body.classList.toggle('portrait', portrait);
-  const nw = touch ? 320 : 427; // computers get a 16:9 view, phones keep 4:3
+  const nw = (touch && portrait) ? 320 : 427; // computers and landscape phones get a 16:9 view; portrait phones keep 4:3 (there's no spare width to use there)
   if (cv.width !== nw) { cv.width = nw; ctx.imageSmoothingEnabled = false; }
   CW = nw; OFFX = Math.round((CW - W) / 2);
   const availH = innerHeight, availW = innerWidth; // no buttons to make room for: the game gets the whole screen
@@ -870,7 +870,7 @@ function finishTurn() {
 
 // ---------- input ----------
 const KEYMAP = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right',
-  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', b:'bag', B:'bag', v:'zoom', V:'zoom' };
+  ' ':'ok', z:'ok', Z:'ok', Enter:'ok', x:'back', X:'back', Escape:'back', Backspace:'back', m:'mute', M:'mute', t:'voice', T:'voice', f:'full', F:'full', g:'map', G:'map', l:'log', L:'log', b:'bag', B:'bag', v:'zoom', V:'zoom', o:'options', O:'options' };
 addEventListener('keydown', e => {
   initAudio();
   if (creatorTyping(e)) return;
@@ -888,8 +888,8 @@ cv.addEventListener('pointerdown', e => {
   if (mode === 'train' && inside({ x: 2, y: 2, w: 60, h: 14 })) { press('back'); return; }
   if (inside(BTN_M)) { press('mute'); return; } if (inside(BTN_T)) { press('voice'); return; } if (inside(BTN_F)) { press('full'); return; }
   const rawX = x + (mode === 'village' ? CW - W : OFFX), rawY = y;
-  if (mode === 'village' && rawY < 14 && rawX > CW - 70) { press('map'); return; }
-  if (mode === 'village' && rawY < 14 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) { press('log'); return; }
+  if (mode === 'village' && rawY < 20 && rawX > CW - 70) { press('map'); return; }
+  if (mode === 'village' && rawY < 20 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) { press('log'); return; }
   if (mode !== 'village') return; // menus/fights: keyboard only for now, this is just world click-to-move
   if (vTalk) { press('ok'); return; }
   if (vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? (rawY >= 198 + i * 19 && rawY <= 198 + i * 19 + 19) : (rawY >= 199 + i * 13 && rawY <= 199 + i * 13 + 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } return; }
@@ -906,6 +906,7 @@ function press(k) {
   if (k === 'map') { toggleMap(); return; }
   if (k === 'log') { toggleLog(); return; }
   if (k === 'bag') { toggleBag(); return; }
+  if (k === 'options') { if (mode === 'village' && !vTalk && !vMenu && !vChoice && !vFish) openOptionsFromGame(); return; }
   if (k === 'zoom' && mode !== 'map') return;
   if (k === 'mute') { setMuted(!muted); if (!muted) sfx('ok'); return; }
   if (k === 'voice') { setVoice(!voiceOn); return; }
@@ -1145,8 +1146,12 @@ function drawSides() {
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(-OFFX, 160, OFFX, 80); ctx.fillRect(W, 160, OFFX + 1, 80);
   ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-OFFX, 160, OFFX, 2); ctx.fillRect(W, 160, OFFX + 1, 2); ctx.fillRect(-OFFX, 238, OFFX, 2); ctx.fillRect(W, 238, OFFX + 1, 2);
 }
+let hintFirstShown = null, hintDismissed = false;
 function render() {
-  if (touchHintEl) touchHintEl.style.display = (touchMode && mode === 'village') ? 'flex' : 'none';
+  if (touchHintEl) {
+    if (touchMode && mode === 'village' && !hintDismissed) { if (hintFirstShown === null) hintFirstShown = time; if (time - hintFirstShown > 4) hintDismissed = true; }
+    touchHintEl.style.display = (touchMode && mode === 'village' && !hintDismissed) ? 'flex' : 'none';
+  }
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, H);
   if (mode === 'map') { ctx.save(); ctx.translate(OFFX, 0); drawMap(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
   if (mode === 'log') { ctx.save(); ctx.translate(OFFX, 0); drawLog(); drawToggles(); drawBackBtn(); ctx.restore(); return; }
@@ -2435,7 +2440,9 @@ Object.keys(TOWNS).forEach(k => {
   for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
   if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
-let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village';
+let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village', optionsReturn = null;
+function openOptionsFromGame() { optionsReturn = { area, x: vx, y: vy }; optIdx = 0; mode = 'options'; sfx('ok'); }
+function leaveOptions() { if (optionsReturn) { const r = optionsReturn; optionsReturn = null; toPlace(r.area, r.x, r.y, ''); vInputLock = .3; } else toTitle(); }
 const southOpen = () => !!(saveData && saveData.wins > 0);
 function placeName() { return area === 'village' ? 'SORYA VILLAGE' : area === 'forest' ? 'THE FOREST' : TOWNS[area] ? TOWNS[area].name : ''; }
 function markVisited(key) { trainOf(); const v = saveData.visited || (saveData.visited = { village: 1 }); v[key] = 1; trSave(); }
@@ -3064,7 +3071,7 @@ function menuPress(k) {
   if (mode === 'options') {
     if (k === 'up') { optIdx = (optIdx + 4) % 5; sfx('move'); }
     else if (k === 'down') { optIdx = (optIdx + 1) % 5; sfx('move'); }
-    else if (k === 'back') { toTitle(); }
+    else if (k === 'back') { leaveOptions(); }
     else if (k === 'ok' || k === 'left' || k === 'right') {
       if (optIdx === 0) { setMuted(!muted); if (!muted) sfx('ok'); }
       else if (optIdx === 1) setVoice(!voiceOn);
@@ -3072,7 +3079,7 @@ function menuPress(k) {
         const order = ['training', 'normal', 'master'], d = k === 'left' ? -1 : 1;
         difficulty = order[(order.indexOf(difficulty) + d + 3) % 3]; try { localStorage.setItem('yadra_diff', difficulty); } catch (e) {} sfx('move');
       } else if (optIdx === 3) { battleFast = !battleFast; try { localStorage.setItem('yadra_speed', battleFast ? 'fast' : 'normal'); } catch (e) {} sfx('move'); }
-      else if (k === 'ok') toTitle();
+      else if (k === 'ok') leaveOptions();
     }
     return true;
   }
@@ -3101,7 +3108,7 @@ function drawBackBtn() {
   const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
   let jid = null, ox = 0, oy = 0;
   const clearHeld = () => { held.left = held.right = held.up = held.down = false; };
-  const canvasXY = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - OFFX, y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
+  const canvasXY = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width - (mode === 'village' ? 0 : OFFX), y: (e.clientY - r.top) * H / r.height, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
   const worldMode = () => mode === 'village' && !vTalk && !vMenu && !vChoice;
   // tap a menu row: first tap selects it, tapping the same row again confirms
   function tapAt(c) {
@@ -3143,7 +3150,8 @@ function drawBackBtn() {
       }
       const c = canvasXY(e);
       if (c.inside && ROOMS[area] && !vFish && c.y >= 15 && c.y <= 32 && c.x > CW - 70) { exitRoom(); return; }
-      if (c.inside && c.y < 14 && c.x > CW - 70) press('map'); else if (c.inside && c.y < 14 && c.x > 40) press('log'); else press('ok');
+      if (c.inside && c.y < 20 && c.x < 40) { openOptionsFromGame(); return; } // the hero-name corner: the only way phones can reach Sound/Voice/Difficulty mid-game
+      if (c.inside && c.y < 20 && c.x > CW - 70) press('map'); else if (c.inside && c.y < 20 && c.x > 40) press('log'); else press('ok');
       return;
     }
     tapAt(canvasXY(e));
