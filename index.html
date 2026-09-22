@@ -1310,8 +1310,9 @@ function drawPanel() {
   if (M.st) costs.push('STA' + M.st);
   if (M.strain) costs.push('STR+' + M.strain);
   textS(costs.length ? costs.join(' ') : 'FREE', 210, 176, '#a0c8ff', 1);
-  foeInfo(mv).forEach((l, i) => textS(l, 210, 187 + i * 9, '#d8d8e8', 1));
-  if (curInfoMsg) textS(curInfoMsg, 210, 214, '#ff8080', 1);
+  const infoMsgLines = curInfoMsg ? wrap(curInfoMsg, 17) : []; // some of these ("CAN'T GUARD TWICE IN A ROW!") need 2 lines here, not 1
+  foeInfo(mv).slice(0, infoMsgLines.length > 1 ? 2 : 3).forEach((l, i) => textS(l, 210, 187 + i * 9, '#d8d8e8', 1));
+  if (infoMsgLines.length) infoMsgLines.forEach((l, i) => textS(l, 210, 214 - (infoMsgLines.length - 1 - i) * 9, '#ff8080', 1)); // anchored to the bottom line so it never reaches the toggle buttons below
   else if (state.p.strain >= 75) textS('WEAK! -20% DMG', 210, 214, '#ff5050', 1);
   else if (state.p.strain >= 50) textS('KI COST +25%', 210, 214, '#ffa020', 1);
   else if (touchMode) textS('TAP AGAIN: USE', 210, 214, '#8888b0', 1);
