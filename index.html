@@ -1710,7 +1710,11 @@ function trainPress(k) {
   if (t.sessions <= 0) { sfx('bad'); trMsg = nightHint(); return true; }
   if (it === 'REST') { t.sessions--; t.fatigue = Math.max(0, t.fatigue - 30); trAfter('YOU RESTED. STRAIN -30.'); return true; }
   const stat = it.toLowerCase();
-  if (t[stat] >= statCapOf(stat)) { sfx('bad'); const nm = nextMilestone(); trMsg = ['body', 'ki', 'focus'].every(k => t[k] >= STAT_MAX) ? 'ALL MAXED! GO FIGHT.' : it + ' IS MAXED. TRAIN ANOTHER.'; return true; }
+  if (t[stat] >= statCapOf(stat)) {
+    // a maxed stat used to make the '20X GRAVITY' mission unwinnable (nothing ever reached trApply, so did20x never got set) - a maxed-out player can still hold 20x for the mission, just with no stat gain
+    if (GRAV[t.grav].g >= 20 && !saveData.did20x) { const lv = GRAV[t.grav]; t.sessions--; t.fatigue = Math.min(99, t.fatigue + lv.fat); saveData.did20x = 1; trAfter('YOUR ' + it + ' IS ALREADY AT ITS LIMIT, BUT YOU HOLD 20X GRAVITY ANYWAY. STRAIN +' + lv.fat + '.', 'warn'); return true; }
+    sfx('bad'); const nm = nextMilestone(); trMsg = ['body', 'ki', 'focus'].every(k => t[k] >= STAT_MAX) ? 'ALL MAXED! GO FIGHT.' : it + ' IS MAXED. TRAIN ANOTHER.'; return true;
+  }
   const gi = t.grav;
   if (gi >= 1 && gi < (trainHall ? GRAV.length : 4) - 1 && Math.random() < .3) { trEvent = { stat, gi }; trEvIdx = 0; mode = 'tevent'; sfx('warn'); say('GRAVITY IS SURGING!'); return true; }
   trApply(stat, GRAV[gi]); return true;
@@ -3424,6 +3428,7 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); },
   npcSayTest(name, lines, n) { const p = { name, lines: lines.slice(), line: 0 }; const out = []; for (let i = 0; i < n; i++) out.push(npcSay(p)); return out; },
   bondUpTest(w, n) { return bondUp(n, w); }, ch2Talk() { ch2Talk({ ch2: true }); }, get ch2() { return saveData && saveData.ch2; },
+  enterGravityHall() { trainHall = true; toTrain('KESHIN HALL: GRAVITY UP TO 20X. WATCH YOUR STRAIN.'); }, setTrIdx(n) { trIdx = n; }, get did20x() { return !!(saveData && saveData.did20x); },
   forceWin() { over = 'win'; overT = 2; mode = 'over'; try { justSaved = recordFight('win'); } catch (e) {} press('ok'); } };
 requestAnimationFrame(frame);
 })();
