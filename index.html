@@ -477,10 +477,20 @@ const SET_M = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_M), SE
 const PAL_V = { K:'#f0c030', S:'#e0b090', B:'#101010', R:'#30b0ff', D:'#183070', O:'#2050b0', A:'#c0c8d8', Y:'#f0c030' };
 const PAL_V2 = { K:'#ffe860', S:'#e0b090', B:'#101010', R:'#ff3030', D:'#601010', O:'#c02020', A:'#ffb020', Y:'#ffffff' };
 const SET_V = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V), SET_V2 = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_V2);
-const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.4, dmg: 1.2, late: .9, plan: .85, fury: true, voice: 'master', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
-  rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.22, dmg: 1.07, late: .7, plan: .6, fury: true, voice: 'rival', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
-  boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
-  bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } } };
+// region guardians (chapter 2 towns): same rig, own palette + own fight style + own arena backdrop (see BG_SET)
+const PAL_FROST = { K:'#dcefff', S:'#e0c8a0', B:'#101010', R:'#3070a0', D:'#183048', O:'#a8d8f0', A:'#6098c0', Y:'#d8f0ff' };
+const PAL_DUNE = { K:'#3a2010', S:'#c08850', B:'#101010', R:'#c08030', D:'#6a4020', O:'#e8c878', A:'#a05a20', Y:'#f0d090' };
+const PAL_EMBER = { K:'#201010', S:'#a05840', B:'#101010', R:'#a02818', D:'#401008', O:'#ff6828', A:'#602010', Y:'#ff9040' };
+const SET_FROST = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_FROST);
+const SET_DUNE = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_DUNE);
+const SET_EMBER = makeSet({ idle0: R_IDLE0, idle1: R_IDLE1, atk: R_ATK }, PAL_EMBER);
+const FOES = { roku: { id: 'roku', name: 'ROKU', set: SET_R, biome: 'temple' }, master: { id: 'master', name: 'MASTER', set: SET_M, set2: SET_M2, furyLabel: 'FOCUS', hp: 1.4, dmg: 1.2, late: .9, plan: .85, fury: true, voice: 'master', biome: 'temple', ai: { rush: .35, blast: .35, chargeHunter: 0, flee: 0 } },
+  rival: { id: 'rival', name: 'RIVAL', set: SET_V, set2: SET_V2, furyLabel: 'RAGE', hp: 1.22, dmg: 1.07, late: .7, plan: .6, fury: true, voice: 'rival', biome: 'temple', ai: { rush: .5, blast: .4, chargeHunter: .3, flee: 0 } },
+  boar: { id: 'boar', name: 'BOAR', set: SET_BOAR, hp: .85, dmg: 1.25, late: .25, plan: .2, fury: false, voice: 'beast', biome: 'forest', ai: { rush: .6, blast: .35, chargeHunter: .8, flee: .08 } },
+  bandit: { id: 'bandit', name: 'BANDIT', set: SET_B, hp: 1, dmg: 1.1, late: .6, plan: .5, fury: false, voice: 'bandit', biome: 'forest', ai: { rush: .55, blast: .4, chargeHunter: .6, flee: .22 } },
+  frostguard: { id: 'frostguard', name: 'FROST RAIDER', set: SET_FROST, hp: 1.05, dmg: 1.05, late: .55, plan: .65, fury: false, voice: 'bandit', biome: 'snow', ai: { rush: .3, blast: .55, chargeHunter: .3, flee: .12 } },
+  duneraider: { id: 'duneraider', name: 'DUNE RAIDER', set: SET_DUNE, hp: .95, dmg: 1.15, late: .35, plan: .3, fury: false, voice: 'bandit', biome: 'desert', ai: { rush: .65, blast: .3, chargeHunter: .7, flee: .3 } },
+  embersmith: { id: 'embersmith', name: 'EMBER SMITH', set: SET_EMBER, hp: 1.2, dmg: 1.12, late: .7, plan: .55, fury: false, voice: 'bandit', biome: 'volcano', ai: { rush: .4, blast: .45, chargeHunter: .2, flee: .05 } } };
 let foe = FOES.roku;
 
 // ---------- background (Yardrat dusk), drawn once ----------
@@ -509,6 +519,43 @@ const bg = document.createElement('canvas'); bg.width = W; bg.height = 160;
   for (let x = 0; x < W; x += 24) g.fillRect(x + ((x / 24) % 2) * 12, 140, 22, 2);
   for (let x = 0; x < W; x += 32) g.fillRect(x, 150, 30, 2);
 })();
+// ---------- region arena backdrops: each biome's fight looks like its own place, not the temple every time ----------
+function makeArenaBg(sky, m1c, m2c, groundC, groundLineC, groundDarkC, decorFn) {
+  const c = document.createElement('canvas'); c.width = W; c.height = 160; const g = c.getContext('2d');
+  sky.forEach((col, i) => { g.fillStyle = col; g.fillRect(0, i * 11, W, 12); });
+  g.fillStyle = m1c;
+  const m1 = [[0,100],[30,84],[52,92],[84,66],[116,90],[150,76],[190,96],[230,70],[268,92],[300,80],[320,96],[320,140],[0,140]];
+  g.beginPath(); g.moveTo(m1[0][0], m1[0][1]); m1.forEach(p => g.lineTo(p[0], p[1])); g.fill();
+  g.fillStyle = m2c;
+  const m2 = [[0,116],[40,100],[80,112],[120,96],[170,114],[220,100],[270,116],[320,104],[320,140],[0,140]];
+  g.beginPath(); g.moveTo(m2[0][0], m2[0][1]); m2.forEach(p => g.lineTo(p[0], p[1])); g.fill();
+  decorFn(g);
+  g.fillStyle = groundC; g.fillRect(0, 132, W, 28);
+  g.fillStyle = groundLineC; g.fillRect(0, 132, W, 3);
+  g.fillStyle = groundDarkC;
+  for (let x = 0; x < W; x += 24) g.fillRect(x + ((x / 24) % 2) * 12, 140, 22, 2);
+  for (let x = 0; x < W; x += 32) g.fillRect(x, 150, 30, 2);
+  return c;
+}
+const bgForest = makeArenaBg(['#0f2a14','#163a1c','#1f4a24','#2c5e2c','#3f7a34','#5f9a3e','#8ab84a','#c8d878'], '#204a20', '#173a17', '#2a3a1a', '#354820', '#1e2a12', g => {
+  g.fillStyle = '#e8f0c0'; g.fillRect(240, 30, 12, 12); // pale moon through the leaves
+  [[20,60],[38,64],[280,58],[300,64]].forEach(p => { g.fillStyle = '#1a3016'; g.beginPath(); g.moveTo(p[0], p[1] + 46); g.lineTo(p[0] + 9, p[1]); g.lineTo(p[0] + 18, p[1] + 46); g.fill(); g.fillStyle = '#24401e'; g.fillRect(p[0] + 6, p[1] + 40, 6, 12); g.fillStyle = '#1a3016'; });
+});
+const bgSnow = makeArenaBg(['#16233a','#1f2f4a','#2c4060','#3d5478','#5878a0','#83a8c8','#b8d8ec','#eaf6ff'], '#3a4a60', '#2a3850', '#c8d8e4', '#a8bece', '#8aa2b4', g => {
+  g.fillStyle = '#f0f8ff'; g.fillRect(240, 28, 14, 14);
+  [[18,60],[36,64],[282,58],[300,64]].forEach(p => { g.fillStyle = '#d8ecff'; g.beginPath(); g.moveTo(p[0] + 5, p[1]); g.lineTo(p[0] + 10, p[1] + 46); g.lineTo(p[0], p[1] + 46); g.fill(); g.fillStyle = '#eaf6ff'; g.fillRect(p[0] + 3, p[1] + 4, 3, 16); });
+  g.fillStyle = 'rgba(255,255,255,.6)'; for (let i = 0; i < 16; i++) g.fillRect((i * 41) % W, (i * 23) % 90, 2, 2);
+});
+const bgDesert = makeArenaBg(['#2a1808','#4a2a10','#6a3a14','#8a4e18','#b06a20','#d08c34','#e8b060','#f8d890'], '#5a3a1c', '#4a2e14', '#c8a050', '#b08840', '#8a6a30', g => {
+  g.fillStyle = '#fff0c0'; g.fillRect(60, 30, 16, 16);
+  [[20,86],[280,86]].forEach(p => { g.fillStyle = '#3a6a2a'; g.fillRect(p[0], p[1], 6, 30); g.fillRect(p[0] - 5, p[1] + 8, 5, 6); g.fillRect(p[0] + 6, p[1] + 14, 5, 6); });
+});
+const bgVolcano = makeArenaBg(['#1a0808','#2a0a0a','#3a0e0c','#5a1810','#7a2814','#9a3c18','#c85a20','#e88030'], '#301010', '#1e0a0a', '#2a1410', '#3a1e14', '#180c08', g => {
+  g.fillStyle = 'rgba(255,120,40,.35)'; g.fillRect(0, 60, W, 40);
+  [[40,120],[130,124],[220,120],[290,124]].forEach(p => { g.fillStyle = '#3a2018'; g.fillRect(p[0], p[1], 16, 12); g.fillStyle = '#ff7030'; g.fillRect(p[0] + 4, p[1] - 4, 4, 4); g.fillRect(p[0] + 9, p[1] - 2, 3, 3); });
+});
+const BG_SET = { temple: bg, forest: bgForest, snow: bgSnow, desert: bgDesert, volcano: bgVolcano };
+function curBg() { return BG_SET[(foe && foe.biome) || 'temple']; }
 
 // ---------- audio (WebAudio chiptune, no files) ----------
 let ac = null, muted = false, musicTimer = null, musicStep = 0;
@@ -1339,8 +1386,8 @@ function update(dt) {
 function drawSides() {
   const flat = mode === 'slots' || mode === 'creator' || mode === 'options' || mode === 'credits' || mode === 'train' || mode === 'tevent';
   if (flat) { ctx.fillStyle = '#0a0a1c'; ctx.fillRect(-OFFX, 0, OFFX, H); ctx.fillRect(W, 0, OFFX + 1, H); return; }
-  ctx.save(); ctx.scale(-1, 1); ctx.drawImage(bg, 0, 0); ctx.restore();                         // scenery mirrored to the left
-  ctx.save(); ctx.translate(W * 2, 0); ctx.scale(-1, 1); ctx.drawImage(bg, 0, 0); ctx.restore(); // ...and to the right
+  ctx.save(); ctx.scale(-1, 1); ctx.drawImage(curBg(), 0, 0); ctx.restore();                         // scenery mirrored to the left
+  ctx.save(); ctx.translate(W * 2, 0); ctx.scale(-1, 1); ctx.drawImage(curBg(), 0, 0); ctx.restore(); // ...and to the right
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(-OFFX, 160, OFFX, 80); ctx.fillRect(W, 160, OFFX + 1, 80);
   ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-OFFX, 160, OFFX, 2); ctx.fillRect(W, 160, OFFX + 1, 2); ctx.fillRect(-OFFX, 238, OFFX, 2); ctx.fillRect(W, 238, OFFX + 1, 2);
 }
@@ -1361,7 +1408,7 @@ function renderInner() {
   if (menuRender()) { drawToggles(); return; }
   ctx.save();
   if (shake > 0) ctx.translate(Math.round(rnd(-shake, shake)), Math.round(rnd(-shake, shake)));
-  ctx.drawImage(bg, 0, 0);
+  ctx.drawImage(curBg(), 0, 0);
   { const s0 = script[si]; if (mode === 'anim' && s0 && s0.pre) s0.pre(s0.dur > 0 ? clamp01(st / s0.dur) : 1); }
   // player aura by strain / charging
   const pAura = () => {
@@ -2484,17 +2531,20 @@ Object.assign(TOWNS, {
     signs: [{ x: 30, y: 112, text: 'SILVERFALL. THE WATERFALL VILLAGE. EAST: THE SNOW ROAD.' }], meals: [meal('RIVER SKEWER', 1, 12, -10), meal('SILVER STEW', 1, 22, 8), meal('FALLS FEAST', 2, 34, 22)], exits: [{ side: 'w', row: 0, to: 'r7' }, { side: 'e', row: 0, to: 'r8' }] },
   frosthaven: { name: 'FROSTHAVEN', kind: 'town', w: 560, h: 300, ground: '#dfe8ee', path: '#a8b8c8', sky: ['#7a9ac0', '#d8e8f4'], deco: 'snow', trees: '#88a8a0', start: [40, 102],
     b: [['INN', 0, 0, '#5a7aa0', '#e8eef4', 'inn'], ['WARM HALL', 1, 0, '#c07050', '#f0e0d0', 'food'], ['WELL HOUSE', 2, 0, '#6a7a90', '#dce4ec', 'hut', { title: 'WELL HOUSE', npc: NPCX('VILLAGER', '#8090b0', '#e8e8e8', ['THE WELL FROZE. WE MELT SNOW FOR WATER.', 'THE COLD SLOWS YOUR BODY. EAT WELL.'], { side: 'well' }) }],
-      ['FUR SHOP', 3, 0, '#8a5a3a', '#e8d8c0', 'hut', { title: 'FUR SHOP', npc: NPCX('FURRIER', '#a07050', '#301810', ['FUR KEEPS YOU WARM. FISH KEEPS ME FED.', 'I BUY FISH AND SELL ROOTS.'], { shop: true }) }]],
+      ['FUR SHOP', 3, 0, '#8a5a3a', '#e8d8c0', 'hut', { title: 'FUR SHOP', npc: NPCX('FURRIER', '#a07050', '#301810', ['FUR KEEPS YOU WARM. FISH KEEPS ME FED.', 'I BUY FISH AND SELL ROOTS.'], { shop: true }) }],
+      ['WATCH POST', 4, 0, '#4a5a70', '#c8d8e8', 'guard', { title: 'WATCH POST', foe: 'frostguard' }]],
     people: [PL('SKIER', '#4060c0', '#201810', 'r0', ['THE SNOW ROAD IS FAST DOWNHILL!', 'THE NORTH IS NOT ON ANY MAP.']), PL('DOG', '#f0f0f0', '#f0f0f0', 'r1', ['WOOF!'], { dog: true })],
     signs: [{ x: 30, y: 112, text: 'FROSTHAVEN. THE SNOW TOWN. THE ROAD BACK IS WEST.' }], meals: [meal('HOT CIDER', 1, 8, -18), meal('SNOW STEW', 1, 24, 8), meal('WINTER FEAST', 2, 36, 26)], exits: [{ side: 'w', row: 0, to: 'r8' }] },
   sunkara: { name: 'SUNKARA', kind: 'town', w: 560, h: 300, ground: '#d8b860', path: '#c8a060', sky: ['#c08040', '#f0d090'], deco: 'desert', trees: '#6a9a3a', start: [40, 102],
     b: [['INN', 0, 0, '#c07a40', '#ecd8a8', 'inn'], ['OASIS TEA', 1, 0, '#3a8a7a', '#e0e8d0', 'food'], ['CARAVAN', 2, 0, '#a05030', '#e0c090', 'hut', { title: 'CARAVAN TENT', npc: NPCX('CARAVAN LEADER', '#c08030', '#402010', ['WE CROSS THE DUNES EVERY WEEK.', 'SAND SLOWS YOU. TRAVEL AT NIGHT.'], { side: 'parcel', sideRole: 'from' }) }],
-      ['BAZAAR', 3, 0, '#a04060', '#e8d8b8', 'hut', { title: 'BAZAAR', npc: NPCX('BAZAAR MERCHANT', '#c08050', '#201008', ['SPICES, ROOTS, HONEY! I BUY FISH TOO.', 'THE DESERT MAKES EVERYTHING EXPENSIVE.'], { shop: true }) }]],
+      ['BAZAAR', 3, 0, '#a04060', '#e8d8b8', 'hut', { title: 'BAZAAR', npc: NPCX('BAZAAR MERCHANT', '#c08050', '#201008', ['SPICES, ROOTS, HONEY! I BUY FISH TOO.', 'THE DESERT MAKES EVERYTHING EXPENSIVE.'], { shop: true }) }],
+      ['OUTPOST', 4, 0, '#8a5a30', '#e0c090', 'guard', { title: 'OUTPOST', foe: 'duneraider' }]],
     people: [PL('NOMAD', '#c0a060', '#302010', 'r0', ['THE OASIS NEVER DRIES.', 'THE LAVA ROAD IS EAST. IT IS HOT!']), PL('CAMEL', '#c8a870', '#c8a870', 'r1', ['GRRR.', 'HRMPH.'], { dog: true })],
     signs: [{ x: 30, y: 112, text: 'SUNKARA. THE DESERT VILLAGE. EAST: THE LAVA ROAD TO EMBERPEAK.' }], meals: [meal('DATE BREAD', 1, 12, -6), meal('DESERT STEW', 1, 22, 10), meal('CARAVAN FEAST', 2, 34, 24)], exits: [{ side: 'w', row: 0, to: 'r9' }, { side: 'e', row: 0, to: 'r13' }] },
   emberpeak: { name: 'EMBERPEAK', kind: 'town', w: 560, h: 300, ground: '#5a4a48', path: '#8a6a58', sky: ['#5a2a2a', '#c86a3a'], deco: 'volcano', trees: '#3a3a3a', start: [40, 102],
     b: [['INN', 0, 0, '#8a4a3a', '#d8c0a8', 'inn'], ['FORGE HALL', 1, 0, '#802a2a', '#c8a898', 'hut', { title: 'FORGE HALL', npc: NPCX('SMELTER', '#a04030', '#101010', ['THE BRIDGE OVER THE LAVA CRACKED.', 'THE MOUNTAIN BREATHES. LISTEN.'], { side: 'lava' }) }],
-      ['ELDER HOUSE', 2, 0, '#6a3a2a', '#d0b8a0', 'hut', { title: 'FIRE ELDER HOUSE', npc: NPCX('FIRE ELDER', '#c05030', '#e8e8e8', ['A FIGHTER IS LIKE A FLAME. FEED IT, BUT DO NOT SMOTHER IT.', 'THE SPICES FROM SUNKARA MAKE THE BEST STEW.'], { side: 'parcel', sideRole: 'to' }) }], ['SPICE STALL', 3, 0, '#c07030', '#e8d0a0', 'food']],
+      ['ELDER HOUSE', 2, 0, '#6a3a2a', '#d0b8a0', 'hut', { title: 'FIRE ELDER HOUSE', npc: NPCX('FIRE ELDER', '#c05030', '#e8e8e8', ['A FIGHTER IS LIKE A FLAME. FEED IT, BUT DO NOT SMOTHER IT.', 'THE SPICES FROM SUNKARA MAKE THE BEST STEW.'], { side: 'parcel', sideRole: 'to' }) }], ['SPICE STALL', 3, 0, '#c07030', '#e8d0a0', 'food'],
+      ['EMBER RING', 4, 0, '#701a1a', '#c89070', 'guard', { title: 'EMBER RING', foe: 'embersmith' }]],
     people: [PL('MINER', '#805040', '#101010', 'r0', ['THE CRATER GLOWS AT NIGHT.', 'THE HEAT MAKES YOU TIRED FAST.']), PL('KID', '#c05030', '#202020', 'r1', ['I WANT TO SEE THE LAVA!', 'MY DAD SAYS NO.'], { small: true })],
     signs: [{ x: 30, y: 112, text: 'EMBERPEAK. THE VOLCANO TOWN. WEST: THE LAVA ROAD.' }], meals: [meal('EMBER BREAD', 1, 12, -4), meal('LAVA STEW', 1, 24, 12), meal('VOLCANO FEAST', 2, 36, 28)], exits: [{ side: 'w', row: 0, to: 'r13' }] },
   portnavis: { name: 'PORT NAVIS', kind: 'town', w: 560, h: 330, ground: '#6a9a8a', path: '#d0c8a8', sky: ['#4a80b8', '#a8d8f0'], deco: 'sea', trees: '#3a9a6a', start: [40, 102], deep: true,
@@ -2593,7 +2643,7 @@ function townInfo(tg) {
   if (tg[2] === 's') return ['READ THE SIGN', ''];
   if (tg[2] === 'o') { const o = T.branches[+tg.slice(3)], f = (saveData.found || {})[o.id]; return ({ chest: [f ? 'EMPTY CHEST' : 'OPEN THE CHEST', f ? 'YOU TOOK EVERYTHING.' : 'SOMETHING IS INSIDE.'], camp: ['THE CAMP FIRE', 'REST OR COOK.'], cave: ['ENTER THE CAVE', 'MOONSTONE CAVE.'], hidden: [f ? 'THE SECRET PASS' : 'A DEAD END...', f ? 'A SHORTCUT ON THE MAP.' : 'THE BUSHES LOOK ODD.'] })[o.kind]; }
   const b = T.bl[+tg.slice(2)], t = trainOf();
-  return ({ inn: ['THE INN', t.sessions ? 'SLEEP TILL TOMORROW OR REST.' : 'SLEEP HERE. NEW DAY.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
+  return ({ inn: ['THE INN', t.sessions ? 'SLEEP TILL TOMORROW OR REST.' : 'SLEEP HERE. NEW DAY.'], food: [b.label, 'LOCAL FOOD. GRILL FISH.'], hut: ['ENTER ' + (b.extra.title || b.label), 'PEOPLE LIVE HERE.'], gym: ['GRAVITY HALL', 'TRAIN UP TO 20X GRAVITY.'], meditate: ['MEDITATION HALL', 'FOCUS +1, STRAIN -15, TIME.'], master: ['SPIRIT TEMPLE', t.sessions ? 'DUEL THE MASTER. COSTS TIME.' : 'THE MASTER SLEEPS. (NIGHT)'], rival: ['GRAND ARENA', t.sessions ? 'DUEL THE RIVAL. COSTS TIME.' : 'CLOSED AT NIGHT.'], guard: [b.extra.title || 'GUARD POST', t.sessions ? 'FIGHT ' + (FOES[b.extra.foe] ? FOES[b.extra.foe].name : 'THE GUARD') + '. COSTS TIME.' : 'CLOSED AT NIGHT.'] })[b.role];
 }
 function nightHint() { return TOWNS[area] && TOWNS[area].kind === 'town' ? 'IT IS NIGHT. SLEEP AT THE INN.' : 'IT IS NIGHT. SLEEP IN YOUR BED AT HOME.'; }
 function innMenu(where) { // sleep until tomorrow at any time, or just rest a little
@@ -2615,11 +2665,17 @@ function enterHut(b) {
   ROOM_PEOPLE.hut = [Object.assign({ x: 120, y: 82, face: 1, step: 0, line: 0 }, b.extra.npc)]; hutTitle = b.extra.title || b.label;
   hutReturn = { area, x: b.dx, y: b.y1 + 12 }; enterRoom('hut');
 }
+const GUARD_LINES = {
+  master: ['MASTER: SIT. BREATHE. NOW SHOW ME YOUR SPIRIT. (DUEL: COSTS TIME)', 'BEGIN. AND DO NOT LIE TO YOURSELF.'],
+  rival: ['RIVAL: ANOTHER CHALLENGER? I WILL CRUSH YOU! (DUEL: COSTS TIME)', 'COME AT ME WITH EVERYTHING!'],
+  frostguard: ['FROST RAIDER: YOU WANT THROUGH? BEAT ME FIRST. (DUEL: COSTS TIME)', 'THE COLD DOES NOT FORGIVE MISTAKES!'],
+  duneraider: ['DUNE RAIDER: THESE SANDS ARE MINE, OUTSIDER! (DUEL: COSTS TIME)', 'RUN WHILE YOU CAN!'],
+  embersmith: ['EMBER SMITH: FORGED IN FIRE, I DO NOT BREAK. (DUEL: COSTS TIME)', 'FEEL THE HEAT OF THE FORGE!'] };
 function duelStart(who) {
-  const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); vMsg = who === 'master' ? 'THE MASTER SLEEPS. COME BACK TOMORROW.' : 'THE ARENA IS CLOSED AT NIGHT.'; return; }
+  const t = trainOf(); if (t.sessions <= 0) { sfx('bad'); vMsg = who === 'master' ? 'THE MASTER SLEEPS. COME BACK TOMORROW.' : 'THIS FIGHTER IS ASLEEP. COME BACK TOMORROW.'; return; }
   t.sessions = Math.max(0, t.sessions - 1); trSave(); foeReturn = { area, x: vx, y: vy };
-  vTalk = who === 'master' ? 'MASTER: SIT. BREATHE. NOW SHOW ME YOUR SPIRIT. (DUEL: COSTS TIME)' : 'RIVAL: ANOTHER CHALLENGER? I WILL CRUSH YOU! (DUEL: COSTS TIME)'; say(vTalk); sfx('warn');
-  vAfterTalk = () => { stopSpeech(); newGame({ foe: who, line: who === 'master' ? 'BEGIN. AND DO NOT LIE TO YOURSELF.' : 'COME AT ME WITH EVERYTHING!' }); };
+  const gl = GUARD_LINES[who]; vTalk = gl[0]; say(vTalk); sfx('warn');
+  vAfterTalk = () => { stopSpeech(); newGame({ foe: who, line: gl[1] }); };
 }
 function toPlace(a, x, y, line) {
   stopSpeech(); trainOf(); mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; vAfterTalk = null; vFade = 1; vFlash = 0; vFace = 1;
@@ -2646,6 +2702,7 @@ function townAct(tg) {
   else if (b.role === 'meditate') meditateNow();
   else if (b.role === 'master') duelStart('master');
   else if (b.role === 'rival') duelStart('rival');
+  else if (b.role === 'guard') duelStart(b.extra.foe);
 }
 // ---------- spots on the roads: chests, camps, a cave and hidden passes ----------
 function foundOf() { trainOf(); return saveData.found || (saveData.found = {}); }
@@ -3294,7 +3351,8 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },
   missions() { return missionList().map(m => ({ id: m.id, kind: m.kind, title: m.title, st: m.st })); },
   setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } },
-  trApplyTest(stat) { const t = trainOf(); trApply(stat, GRAV[t.grav]); }, get trMsg() { return trMsg; } };
+  trApplyTest(stat) { const t = trainOf(); trApply(stat, GRAV[t.grav]); }, get trMsg() { return trMsg; },
+  allTowns() { return Object.keys(TOWNS); }, buildingSpots(k) { const T = TOWNS[k]; return T.bl.map(b => ({ x: b.dx, y: b.y1 + 10, label: b.label })); } };
 requestAnimationFrame(frame);
 })();
 </script>
