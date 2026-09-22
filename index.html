@@ -1132,10 +1132,17 @@ function press(k) {
   }
 }
 // RUN AWAY: leave the fight. No win, no loss, no rewards. The time slot is already spent.
+// Roku gets one last hit in as you turn to run: it doesn't touch battle HP (that's discarded when you leave),
+// it adds Strain you carry into your NEXT fight (see fatigue/startStrain), so fleeing has a real cost.
 function runAway() {
   stopSpeech(); sfx('ok');
   if (saveData && curSlot >= 0) {
-    if (foe.id === 'roku') { saveData.fled = (saveData.fled | 0) + 1; const t = trainOf(); t.sessions = Math.max(0, t.sessions - 1); t.meal = 0; }
+    if (foe.id === 'roku') {
+      saveData.fled = (saveData.fled | 0) + 1;
+      const t = trainOf();
+      t.sessions = Math.max(0, t.sessions - 1); t.meal = 0;
+      t.fatigue = Math.min(99, t.fatigue + (R.form === 2 ? 26 : 18));
+    }
     saveData.savedAt = Date.now(); writeSlot(curSlot, saveData);
   }
   if (foe.id === 'roku') { if (saveData) toVillage('ROKU: RUNNING AWAY? FINE. TRAIN, THEN COME BACK.'); else toTitle(); return; }
