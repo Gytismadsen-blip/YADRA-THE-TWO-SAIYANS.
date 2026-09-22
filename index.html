@@ -2209,7 +2209,19 @@ function drawVillage() {
   const wide = CW > 320, fc = t.fatigue >= 75 ? '#ff5050' : t.fatigue >= 50 ? '#ffa020' : '#c8c840'; textS('STRAIN ' + t.fatigue, wide ? 158 : 172, 3, fc, 1);
   if (t.meal) textS('FED +' + t.meal, wide ? 220 : 252, 3, '#ffb060', 1);
   textS(wide ? '[G] MAP' : 'MAP', wide ? CW - 48 : CW - 22, 3, '#80e0ff', 1);
-  if (wide) { const lx = CW - 48 - 6 - textW('[L] LOG'), pw = textW(placeName()), px = lx - 10 - pw, fedEnd = t.meal ? 220 + textW('FED +' + t.meal) + 8 : 0; textS('[L] LOG', lx, 3, '#ffd080', 1); textS('[B] BAG', lx - 50, 3, '#ffd080', 1); if (px - 50 > fedEnd + 4) textS(placeName(), px - 50, 3, '#c8f0ff', 1); } else if (!t.meal) textS('LOG', 232, 3, '#ffd080', 1);
+  if (wide) {
+    const lx = CW - 48 - 6 - textW('[L] LOG'), bagX = lx - 50; // [B] BAG sits left of [L] LOG, which sits left of [G] MAP
+    textS('[L] LOG', lx, 3, '#ffd080', 1); textS('[B] BAG', bagX, 3, '#ffd080', 1);
+    const strainEnd = 158 + textW('STRAIN ' + t.fatigue), fedEnd = t.meal ? 220 + textW('FED +' + t.meal) : strainEnd;
+    const avail = (bagX - 10) - (Math.max(strainEnd, fedEnd) + 10);
+    let pn = placeName(); // shrink to fit instead of overlapping STRAIN/FED - drop "THE ", then trailing words, then hard-cut as a last resort
+    if (pn) {
+      if (pn.indexOf('THE ') === 0) pn = pn.slice(4);
+      while (pn.indexOf(' ') >= 0 && textW(pn) > avail) pn = pn.slice(0, pn.lastIndexOf(' '));
+      if (textW(pn) > avail) pn = pn.slice(0, Math.max(0, Math.floor(avail / 6)));
+      if (pn) textS(pn, bagX - 10 - textW(pn), 3, '#c8f0ff', 1);
+    }
+  } else if (!t.meal) textS('LOG', 232, 3, '#ffd080', 1);
   // bottom box
   ctx.fillStyle = '#0d0d24'; ctx.fillRect(0, 196, CW, 44); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(0, 196, CW, 2); ctx.fillRect(0, 238, CW, 2); ctx.fillRect(0, 196, 2, 44); ctx.fillRect(CW - 2, 196, 2, 44);
   const key = touchMode ? 'TAP' : 'Z';
