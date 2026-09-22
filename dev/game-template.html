@@ -1351,13 +1351,20 @@ function toTrain(line) {
   P.set = makeHeroSet(hero); trMsg = line || 'ROKU: PICK YOUR TRAINING.'; if (line) say(line);
 }
 function trAfter(line, sound) { const t = trainOf(); trMsg = line; trFlash = .35; sfx(sound || 'ok'); say(line); trSave(); if (t.sessions <= 0) trMsg += ' IT IS NIGHT. SLEEP AT HOME.'; }
+// Named tiers at levels 4/8/12 give training a felt payoff (a new technique, not just a bigger number).
+// Cosmetic only: the underlying dmgMul/crit formula in combat-core.js (sim-balanced) is unchanged.
+const STAT_TIERS = { body: { 4: 'HEAVY STRIKE', 8: 'CRUSHING BLOW', 12: 'DRAGON FIST' }, ki: { 4: 'CHARGED BLAST', 8: 'TWIN BLAST', 12: 'SPIRIT CANNON' }, focus: { 4: 'QUICK EYE', 8: "MIND'S EDGE", 12: 'PERFECT CALM' } };
+function tierCrossed(stat, before, after) { const tiers = STAT_TIERS[stat]; for (const lvl of [12, 8, 4]) if (before < lvl && after >= lvl) return { lvl, name: tiers[lvl] }; return null; }
+function bestTier(stat, level) { const tiers = STAT_TIERS[stat]; for (const lvl of [12, 8, 4]) if (level >= lvl) return tiers[lvl]; return ''; }
 function trApply(stat, lv) { // one training turn at gravity level lv
   const t = trainOf(); t.sessions--;
   if (t.fatigue + lv.fat >= 100) { t.fatigue = 60; trAfter('YOU COLLAPSED UNDER ' + lv.g + 'X! NO GAIN.', 'lose'); return; }
   const d0 = derived(t), before = t[stat]; t[stat] = Math.min(statCapOf(stat), t[stat] + lv.gain); t.fatigue += lv.fat; if (lv.g >= 20) saveData.did20x = 1;
   const got = t[stat] - before;
   const d1 = derived(t), gainTxt = stat === 'body' ? 'HP ' + d1.hp + ' STRIKE ' + d0.strike + '>' + d1.strike : stat === 'ki' ? 'BLAST ' + d0.blast + '>' + d1.blast + ' LANCE ' + d0.lance + '>' + d1.lance : 'CRIT ' + d1.crit + '%';
-  trAfter((got ? stat.toUpperCase() + ' +' + got + '. ' + gainTxt : stat.toUpperCase() + ' IS FULL') + '. STRAIN +' + lv.fat + '.', lv.g >= 10 ? 'warn' : 'ok');
+  const tier = got ? tierCrossed(stat, before, t[stat]) : null;
+  const base = (got ? stat.toUpperCase() + ' +' + got + '. ' + gainTxt : stat.toUpperCase() + ' IS FULL') + '. STRAIN +' + lv.fat + '.';
+  trAfter(tier ? 'NEW TECHNIQUE: ' + tier.name + '! ' + base : base, tier ? 'win' : (lv.g >= 10 ? 'warn' : 'ok'));
 }
 function trainPress(k) {
   const t = trainOf();
@@ -3021,7 +3028,8 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
   routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },
   missions() { return missionList().map(m => ({ id: m.id, kind: m.kind, title: m.title, st: m.st })); },
-  setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } } };
+  setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } },
+  trApplyTest(stat) { const t = trainOf(); trApply(stat, GRAV[t.grav]); }, get trMsg() { return trMsg; } };
 requestAnimationFrame(frame);
 })();
 </script>
