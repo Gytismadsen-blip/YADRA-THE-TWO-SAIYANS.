@@ -1606,6 +1606,7 @@ function villageUpdate(dt) {
   if (vSenseT > 0) vSenseT -= dt; if (vBanditT > 0) vBanditT -= dt;
   const near = vNearPerson(), nearP = curPeople()[near];
   if (area === 'forest' && !vTalk && vBanditT <= 0) { const bs = boarSpot(); if (bs && Math.hypot(vx - bs.x, vy - bs.y) < 34) { vTalk = 'A WILD BOAR BLOCKS THE TRAIL! IT SNORTS AND PAWS THE GROUND. (HUNT: COSTS TIME, STRAIN +8)'; vAfterTalk = fightBoar; vBanditT = 8; sfx('warn'); say(vTalk); } }
+  if (area === 'r1' && !vTalk && saveData && !saveData.r1Ambush && vx > 460 && vy > TOWNS.r1.forestBand[0] && vy < TOWNS.r1.forestBand[1]) { saveData.r1Ambush = 1; trSave(); vTalk = 'BANDITS JUMP OUT OF THE TREES! "THIS TRAIL HAS A TOLL NOW!"'; vAfterTalk = fightBandits; sfx('warn'); say(vTalk); }
   if (area === 'forest' && !vTalk && vBanditT <= 0 && forestPeople().length && Math.hypot(vx - 534, vy - 206) < 46) { vTalk = 'BANDIT: THIS GIRL IS OURS. LEAVE, KID!'; vAfterTalk = fightBandits; vBanditT = 8; sfx('warn'); say(vTalk); }
   const wl = area === 'village' ? V_PEOPLE : TOWNS[area] ? townPeople() : null;
   if (wl) wl.forEach((p, i) => { // wander, but stand still while you are close or talking
@@ -2441,7 +2442,7 @@ function laneShade(hex, factor) {
 const LANE_NAMES = ['PACKED DIRT PATH', 'LOOSE STONE PATH', 'SANDY TRAIL', 'MOSSY TRACK', 'OLD PLANK PATH'];
 const LANE_TINTS = [1, 0.68, 1.32, 0.85, 1.15];
 const ROUTE_FORKX = 380;
-Object.keys(ROUTE_DEF).forEach(k => {
+Object.keys(ROUTE_DEF).filter(k => k !== 'r1').forEach(k => {
   const T = TOWNS[k], laneCount = T.branches ? 5 : 3, zoneTop = 70, zoneBottom = T.h === 300 ? 226 : 168, zoneH = zoneBottom - zoneTop;
   const bandH = Math.floor((zoneH - (laneCount - 1) * 8) / laneCount), laneBands = [];
   for (let i = 0; i < laneCount; i++) { const y0 = zoneTop + i * (bandH + 8); laneBands.push([y0, y0 + bandH]); }
@@ -2457,6 +2458,16 @@ Object.keys(ROUTE_DEF).forEach(k => {
   for (let x = ROUTE_FORKX + 14; x < T.w - 20; x += 8) { T.forkTrees.push({ x, y: zoneTop - 8 }); T.forkTrees.push({ x, y: zoneBottom + 8 }); }
   laneBands.forEach((b, i) => { if (i === correct) return; for (let x = T.w - 54; x < T.w - 24; x += 8) for (let y = b[0]; y <= b[1]; y += 8) T.forkTrees.push({ x, y }); });
 });
+{ // r1 (EAST ROAD, forest -> tavora): a real fork, not a puzzle - two different paths that both lead to Tavora, not one correct lane among dead ends
+  const T = TOWNS.r1, zoneTop = 70, zoneBottom = 168, gap = 8, bandH = Math.floor((zoneBottom - zoneTop - gap) / 2);
+  const riverBand = [zoneTop, zoneTop + bandH], forestBand = [zoneTop + bandH + gap, zoneBottom];
+  T.forkX = ROUTE_FORKX; T.laneCount = 2; T.laneBands = [riverBand, forestBand]; T.correctLane = -1; T.riverBand = riverBand; T.forestBand = forestBand; T.zoneTop = zoneTop; T.zoneBottom = zoneBottom;
+  T.laneMat = [{ color: laneShade(T.path, 1.15), name: 'RIVER PATH' }, { color: laneShade(T.path, 0.8), name: 'FOREST TRAIL' }];
+  T.streets = [[zoneTop - 4, zoneBottom + 4], riverBand, forestBand];
+  T.exits = [{ side: 'w', row: 0, to: 'forest' }, { side: 'e', row: 1, to: 'tavora' }, { side: 'e', row: 2, to: 'tavora' }];
+  T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS. RIVER PATH: SAFE BUT LONG. FOREST TRAIL: SHORT BUT HAS BANDITS.';
+  T.forkTrees = []; // no dead ends - both paths really lead on
+}
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2791,6 +2802,8 @@ function drawTown() {
   if (T.forkX) {
     const s0 = T.streets[0]; rr(0, s0[0], T.forkX, s0[1] - s0[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.forkX; x += 10) ctx.fillRect(x, s0[0] + 3 + (x % 3) * 5, 3, 2);
     T.laneMat.forEach((m, i) => { const s = T.streets[1 + i]; rr(T.forkX, s[0], T.w - T.forkX, s[1] - s[0], m.color); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = T.forkX + 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
+    if (T.riverBand) { const s = T.riverBand, my = (s[0] + s[1]) / 2; ctx.fillStyle = '#3a80c0'; for (let x = T.forkX + 6; x < T.w - 6; x += 5) ctx.fillRect(x, Math.round(my - 3 + Math.sin(time + x * 0.06) * 4), 3, 6); }
+    if (T.forestBand) { const s = T.forestBand; for (let x = T.forkX + 16; x < T.w - 10; x += 24) vTree({ x, y: s[1] - 6 }); }
   } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
   if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
