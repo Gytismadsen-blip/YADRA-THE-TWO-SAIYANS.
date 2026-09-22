@@ -879,14 +879,23 @@ addEventListener('keydown', e => {
   press(k);
 });
 const BTN_M = { x: 196, y: 225, w: 46, h: 12 }, BTN_T = { x: 246, y: 225, w: 58, h: 12 }, BTN_F = { x: 138, y: 225, w: 52, h: 12 };
+let mouseGoTo = null, mouseStuckT = 0; // desktop: click the ground to walk there (keyboard still works and always overrides)
 cv.addEventListener('pointerdown', e => {
   if (touchMode) return; // phones use the touch controls below
   initAudio(); cv.focus();
   const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * CW / r.width - (mode === 'village' ? CW - W : OFFX), y = (e.clientY - r.top) * H / r.height;
   const inside = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
   if (mode === 'train' && inside({ x: 2, y: 2, w: 60, h: 14 })) { press('back'); return; }
-  if (inside(BTN_M)) press('mute'); else if (inside(BTN_T)) press('voice'); else if (!touchMode && inside(BTN_F)) press('full');
-  { const rawX = x + (mode === 'village' ? CW - W : OFFX); if (mode === 'village' && y < 14 && rawX > CW - 70) press('map'); else if (mode === 'village' && y < 14 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) press('log'); }
+  if (inside(BTN_M)) { press('mute'); return; } if (inside(BTN_T)) { press('voice'); return; } if (inside(BTN_F)) { press('full'); return; }
+  const rawX = x + (mode === 'village' ? CW - W : OFFX), rawY = y;
+  if (mode === 'village' && rawY < 14 && rawX > CW - 70) { press('map'); return; }
+  if (mode === 'village' && rawY < 14 && rawX > CW - 190 && rawX <= CW - 70 && CW > 320) { press('log'); return; }
+  if (mode !== 'village') return; // menus/fights: keyboard only for now, this is just world click-to-move
+  if (vTalk) { press('ok'); return; }
+  if (vChoice) { const cn = vChoice.opts.length; for (let i = 0; i < cn; i++) if (cn <= 2 ? (rawY >= 198 + i * 19 && rawY <= 198 + i * 19 + 19) : (rawY >= 199 + i * 13 && rawY <= 199 + i * 13 + 13)) { if (vChoice.idx === i) press('ok'); else { vChoice.idx = i; sfx('move'); } return; } return; }
+  if (vMenu || vFish) return; // food/friend/shop/cook menus and fishing: keyboard only for now
+  if (rawY >= 196) return; // bottom info box, not the walkable area
+  mouseGoTo = { x: rawX + camX, y: rawY + camY }; mouseStuckT = 0;
 });
 function toggleFullscreen() {
   const d = document.documentElement;
@@ -1593,17 +1602,27 @@ function villageUpdate(dt) {
   });
   fishUpdate(dt);
   if (!vTalk && !vMenu && !vFish && !vChoice) {
-    const dx = (held.right ? 1 : 0) - (held.left ? 1 : 0), dy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
+    const kdx = (held.right ? 1 : 0) - (held.left ? 1 : 0), kdy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
+    let dx = kdx, dy = kdy, mouseDriven = false;
+    if (kdx || kdy) mouseGoTo = null; // the keyboard always cancels an in-progress mouse walk
+    else if (mouseGoTo) {
+      const ddx = mouseGoTo.x - vx, ddy = mouseGoTo.y - vy, dist = Math.hypot(ddx, ddy);
+      if (dist < 4) { mouseGoTo = null; if (vTarget()) press('ok'); }
+      else { dx = ddx / dist; dy = ddy / dist; mouseDriven = true; }
+    }
     if (dx || dy) {
-      const sp = 70 * dt / (dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx;
+      const sp = 70 * dt / (!mouseDriven && dx && dy ? 1.41 : 1); vWalk += dt * 9; if (dx) vFace = dx > 0 ? 1 : -1;
       let minX = 10, maxX = WORLD.w - 10, minY = 100, maxY = WORLD.h - 8;
       if (area === 'village' && !gateOpen()) maxX = 616;
       if (area === 'village' && !southOpen()) maxY = 384;
       if (TOWNS[area]) { const T = TOWNS[area]; minX = 4; maxX = T.w - 4; minY = T.minY; maxY = T.h - 6; }
       else if (area === 'forest') { minX = 3; maxX = FOREST.w - 10; minY = 40; maxY = FOREST.h - 8; }
       else if (area !== 'village') { const r = ROOMS[area]; minX = 10; maxX = r.w - 10; minY = r.miny; maxY = r.h - 8; if (Math.abs(vx - r.door) <= 18) maxY = r.h; }
-      const nx = Math.max(minX, Math.min(maxX, vx + dx * sp)), ny = Math.max(minY, Math.min(maxY, vy + dy * sp));
+      const px = vx, py = vy, nx = Math.max(minX, Math.min(maxX, vx + dx * sp)), ny = Math.max(minY, Math.min(maxY, vy + dy * sp));
       if (!vSolid(nx, vy)) vx = nx; if (!vSolid(vx, ny)) vy = ny;
+      if (mouseDriven) { // no real pathfinding - if something blocks the straight line to the click, give up cleanly instead of getting stuck forever
+        if (Math.hypot(vx - px, vy - py) < sp * 0.15) { mouseStuckT += dt; if (mouseStuckT > 0.5) mouseGoTo = null; } else mouseStuckT = 0;
+      }
       if (area === 'village' && vy >= WORLD.h - 12 && Math.abs(vx - 160) <= 24 && southOpen()) enterArea('r4', 'village');
       else if (area === 'village' && vx >= 626 && gateOpen()) enterForest();
       else if (area === 'forest' && vx >= FOREST.w - 14 && questOf().step >= 3) enterArea('r1', 'forest');
