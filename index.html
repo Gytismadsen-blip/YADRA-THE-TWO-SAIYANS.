@@ -2646,7 +2646,7 @@ Object.assign(TOWNS, {
     b: [['INN', 0, 0, '#5a7a3a', '#d8d0a8', 'inn'], ['HERB SHOP', 1, 0, '#4a8a5a', '#e0e0b8', 'hut', { title: 'HERB SHOP', npc: NPCX('HERBALIST', '#60a060', '#e0e0e0', ['HERBS, ROOTS AND HONEY. SELL ME YOUR FISH AND I GIVE COINS.', 'A GOOD MEAL MAKES A FIGHTER STRONG FOR A DAY.'], { shop: true }) }],
       ['TREE HOUSE', 2, 0, '#6a4a2a', '#c8a070', 'hut', { title: 'TREE HOUSE', npc: NPCX('CARPENTER', '#a07040', '#402010', ['THE TREES HERE ARE OLDER THAN ORAYA CITY.', 'ELMVALE IS QUIET. THE FOREST TALKS IF YOU LISTEN.'], { side: 'treehouse' }) }], ['SOUP HOUSE', 3, 0, '#8a6a3a', '#e0d0a8', 'food']],
     people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['THE DEEP WOODS ROAD IS DARK BUT SAFE.', 'THERE ARE SECRET PATHS HERE. USE SPIRIT SENSE.']), PL('GIRL', '#e0a040', '#402010', 'r1', ['I FOUND A GLOWING MUSHROOM!', 'THE HERBALIST PAYS FOR FISH.'], { small: true })],
-    signs: [{ x: 30, y: 112, text: 'ELMVALE. THE FOREST VILLAGE. EAST: THE DEEP WOODS ROAD TO TAVORA.' }], meals: [meal('MUSHROOM SOUP', 1, 12, -12), meal('FOREST STEW', 1, 22, 6), meal('WOODLAND FEAST', 2, 33, 20)], exits: [{ side: 'e', row: 0, to: 'r10' }] },
+    signs: [{ x: 30, y: 112, text: 'ELMVALE. THE FOREST VILLAGE. EAST: THE DEEP WOODS ROAD TO TAVORA. WEST: THE OLD TRAIL.' }], meals: [meal('MUSHROOM SOUP', 1, 12, -12), meal('FOREST STEW', 1, 22, 6), meal('WOODLAND FEAST', 2, 33, 20)], exits: [{ side: 'e', row: 0, to: 'r10' }, { side: 'w', row: 0, to: 'elmpath' }] },
   silverfall: { name: 'SILVERFALL', kind: 'town', w: 560, h: 300, ground: '#4a9a6a', path: '#c8c0a0', sky: ['#3a6a9a', '#9ac8e8'], deco: 'falls', trees: '#2a8a4a', start: [40, 102],
     b: [['INN', 0, 0, '#3a7a8a', '#d8e0d8', 'inn'], ['MILL', 1, 0, '#8a6a3a', '#d8c8a0', 'hut', { title: 'WATER MILL', npc: NPCX('MILLER', '#b08040', '#e0e0e0', ['THE FALL TURNS MY MILL. NO WATER, NO FLOUR.', 'THE WATER COMES FROM THE SNOW ROADS IN THE NORTH.'], { side: 'fall' }) }],
       ['FISH GRILL', 2, 0, '#c07a30', '#e8d8b0', 'food'], ['SHRINE', 3, 0, '#5a6aa0', '#e0e0f0', 'hut', { title: 'WATERFALL SHRINE', npc: NPCX('PRIEST', '#6080c0', '#f0f0f0', ['STAND UNDER THE FALL. IT TEACHES PATIENCE.', 'MANY FIGHTERS CAME HERE. FEW STAYED UNDER IT.'], {}) }]],
@@ -2736,10 +2736,17 @@ Object.keys(ROUTE_DEF).filter(k => k !== 'r1').forEach(k => {
   T.forkX = ROUTE_FORKX; T.laneCount = 2; T.laneBands = [riverBand, forestBand]; T.correctLane = -1; T.riverBand = riverBand; T.forestBand = forestBand; T.zoneTop = zoneTop; T.zoneBottom = zoneBottom;
   T.laneMat = [{ color: laneShade(T.path, 1.15), name: 'RIVER PATH' }, { color: laneShade(T.path, 0.8), name: 'FOREST TRAIL' }];
   T.streets = [[zoneTop - 4, zoneBottom + 4], riverBand, forestBand];
-  T.exits = [{ side: 'w', row: 0, to: 'forest' }, { side: 'e', row: 1, to: 'tavora' }, { side: 'e', row: 2, to: 'tavora' }];
+  T.southBranch = { x0: 180, x1: 220 }; // a real T-junction before the river/forest fork: straight on to Tavora, or south to Elmvale
+  T.exits = [{ side: 'w', row: 0, to: 'forest' }, { side: 'e', row: 1, to: 'tavora' }, { side: 'e', row: 2, to: 'tavora' }, { side: 's', xRange: [180, 220], to: 'elmpath' }];
   T.signs[1].x = ROUTE_FORKX - 34; T.signs[1].text = 'THE ROAD FORKS. RIVER PATH: SAFE. FOREST TRAIL: BANDITS ROAM IT.';
+  T.signs.push({ x: 200, y: 150, text: 'SOUTH: THE OLD TRAIL TO ELMVALE.' });
   T.forkTrees = []; // no dead ends - both paths really lead on
 }
+TOWNS.elmpath = { // OLD ELM TRAIL: a narrow, short link from the EAST ROAD junction to Elmvale, so Elmvale no longer requires a trip through Tavora first
+  name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[96, 112]], start: [30, 104],
+  b: [], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'elmvale' }],
+  people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['FEW USE THIS TRAIL NOW.', 'ELMVALE IS JUST AHEAD.'])],
+  signs: [{ x: 22, y: 104, text: 'NORTH: BACK TO THE EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }] };
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2932,14 +2939,20 @@ function enterArea(to, from, fromExit) {
   if (to === 'forest') { area = 'forest'; vx = FOREST.w - 30; vy = 206; }
   else if (to === 'village') { area = 'village'; vx = 160; vy = 384; }
   else {
-    const T = TOWNS[to], ex = T.exits.find(e => e.to === from), st = T.streets[ex ? ex.row : 0], my = Math.round((st[0] + st[1]) / 2);
-    area = to; vx = ex && ex.side === 'e' ? T.w - 30 : 30; vy = my; if (T.kind === 'town') markVisited(to);
+    const T = TOWNS[to], ex = T.exits.find(e => e.to === from);
+    area = to;
+    if (ex && ex.side === 's') { vx = Math.round((ex.xRange[0] + ex.xRange[1]) / 2); vy = T.h - 40; } // arriving back onto a north-south branch, clear of its own trigger zone (which starts at T.h - 30)
+    else { const st = T.streets[ex ? ex.row : 0], my = Math.round((st[0] + st[1]) / 2); vx = ex && ex.side === 'e' ? T.w - 30 : 30; vy = my; }
+    if (T.kind === 'town') markVisited(to);
   }
   vFade = 1; vWalk = 0; vMsg = 'YOU ARRIVE: ' + areaLabel(to) + '.'; sfx('ok'); vTalk = '';
 }
 function townExits() {
   const T = TOWNS[area];
-  T.exits.forEach(e => { const st = T.streets[e.row]; if (vy < st[0] - 8 || vy > st[1] + 8) return; if ((e.side === 'w' && vx <= 5) || (e.side === 'e' && vx >= T.w - 6)) enterArea(e.to, area, e); });
+  T.exits.forEach(e => {
+    if (e.side === 's') { if (vx < e.xRange[0] || vx > e.xRange[1] || vy < T.h - 30) return; enterArea(e.to, area, e); return; }
+    const st = T.streets[e.row]; if (vy < st[0] - 8 || vy > st[1] + 8) return; if ((e.side === 'w' && vx <= 5) || (e.side === 'e' && vx >= T.w - 6)) enterArea(e.to, area, e);
+  });
 }
 function fastTravel(key) {
   const t = trainOf(), cost = travelCost(mapCurrent(), key); if (t.sessions <= 0) { sfx('bad'); return 'IT IS NIGHT. NO TIME TO TRAVEL.'; }
@@ -3076,6 +3089,7 @@ function drawTown() {
     T.laneMat.forEach((m, i) => { const s = T.streets[1 + i]; rr(T.forkX, s[0], T.w - T.forkX, s[1] - s[0], m.color); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = T.forkX + 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
     if (T.riverBand) { const s = T.riverBand, my = (s[0] + s[1]) / 2; ctx.fillStyle = '#3a80c0'; for (let x = T.forkX + 6; x < T.w - 6; x += 5) ctx.fillRect(x, Math.round(my - 3 + Math.sin(time + x * 0.06) * 4), 3, 6); }
     if (T.forestBand) { const s = T.forestBand; for (let x = T.forkX + 16; x < T.w - 10; x += 24) vTree({ x, y: s[1] - 6 }); }
+    if (T.southBranch) { const b = T.southBranch, s0 = T.streets[0]; rr(b.x0, s0[1], b.x1 - b.x0, T.h - s0[1], T.path); }
   } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
   if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
