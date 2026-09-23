@@ -2481,7 +2481,7 @@ TOWNS.elmpath = { // OLD ELM TRAIL: a narrow, short link from the EAST ROAD junc
   name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[96, 112]], start: [30, 104],
   b: [], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'elmvale' }],
   people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['FEW USE THIS TRAIL NOW.', 'ELMVALE IS JUST AHEAD.'])],
-  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }] };
+  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }], noScatter: true, bendPath: true };
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2490,9 +2490,22 @@ Object.keys(TOWNS).forEach(k => {
   T.trees = []; const seed = T.seed || (k.length * 7);
   const blocked = (x, y) => T.bl.some(b => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 6 && y < b.y1 + 26) || T.streets.some(s => y > s[0] - 14 && y < s[1] + 10 && T.kind === 'route' ? true : y > s[0] - 8 && y < s[1] + 8) || (T.water && y > T.water[1] - 24) || (T.kind === 'town' && x < 24) || x > T.w - 24;
   const n = 40; // routes used to get more than double a town's tree count (90 vs 40) - way too dense, felt like a wall
-  for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > T.streets[0][0] - 14 && y < T.streets[0][1] + 14) || (T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
+  if (!T.noScatter) for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > T.streets[0][0] - 14 && y < T.streets[0][1] + 14) || (T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
   if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
+{ // OLD ELM TRAIL: a hand-built winding path (two turns and a clearing) instead of one straight strip
+  const T = TOWNS.elmpath;
+  T.pathSegs = [[0, 140, 104, 20], [170, 300, 124, 40], [330, 460, 104, 20]]; // [x0, x1, yCenter, halfWidth] - the clearing's band is a strict superset of the two straight segments' band (same top, wider bottom), so nowhere a player can stand in one segment ever falls outside the next - no seam can dead-end
+  T.pathJunctions = [[140, 170, 84, 164], [300, 330, 84, 164]]; // matches the clearing's own band exactly (the union of both neighbours)
+  T.landmark = { x: 235, y: 150 }; // in the clearing's extra lower half, off to the side of the direct through-route rather than blocking it
+  // Solid rectangles for the walls, not a line of point-trees: a player holding a diagonal into a
+  // point-wall could settle at a spot that's clear of the one tree ahead but still catches the next
+  // one over, and get stuck for good - real testing here hit that. Rectangles have no such gap.
+  T.wallRects = [];
+  T.pathSegs.forEach(([x0, x1, yc, hw]) => { T.wallRects.push([x0, 0, x1, yc - hw], [x0, yc + hw, x1, T.h]); });
+  T.pathJunctions.forEach(([x0, x1, y0, y1]) => { T.wallRects.push([x0, 0, x1, y0], [x0, y1, x1, T.h]); });
+  T.trees.push(T.landmark); // the old elm is a normal single obstacle - no wall-sliding risk since it's not part of a continuous line
+}
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village', optionsReturn = null;
 function openOptionsFromGame() { optionsReturn = { area, x: vx, y: vy }; optIdx = 0; mode = 'options'; sfx('ok'); }
 function leaveOptions() { if (optionsReturn) { const r = optionsReturn; optionsReturn = null; toPlace(r.area, r.x, r.y, ''); vInputLock = .3; } else toTitle(); }
@@ -2513,6 +2526,7 @@ function townSolid(x, y) {
   if (T.water) { const w = T.water; if (x > 280 && x < 320 && y > w[1] && y < w[1] + 60 && T.dock) return false; if (y > w[1] + 6 && y < w[3]) return true; }
   if (T.bl.some(b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1)) return true;
   if (T.deco === 'city' && x > T.w / 2 - 22 && x < T.w / 2 + 22 && y > 120 && y < 146) return true;
+  if (T.wallRects && T.wallRects.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3])) return true; // solid rectangles: no gaps, unlike a line of point-trees
   return T.trees.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function townInfo(tg) {
@@ -2826,6 +2840,11 @@ function drawTown() {
     if (T.riverBand) { const s = T.riverBand, my = (s[0] + s[1]) / 2; ctx.fillStyle = '#3a80c0'; for (let x = T.forkX + 6; x < T.w - 6; x += 5) ctx.fillRect(x, Math.round(my - 3 + Math.sin(time + x * 0.06) * 4), 3, 6); }
     if (T.forestBand) { const s = T.forestBand; for (let x = T.forkX + 16; x < T.w - 10; x += 24) vTree({ x, y: s[1] - 6 }); }
     if (T.southBranch) { const b = T.southBranch, s0 = T.streets[0]; rr(b.x0, s0[1], b.x1 - b.x0, T.h - s0[1], T.path); }
+  } else if (T.bendPath) {
+    ctx.fillStyle = 'rgba(0,0,0,.1)';
+    T.pathSegs.forEach(([x0, x1, yc, hw]) => { rr(x0, yc - hw, x1 - x0, hw * 2, T.path); for (let x = x0 + 4; x < x1; x += 10) ctx.fillRect(x, yc - hw + 3 + (x % 3) * 5, 3, 2); });
+    T.pathJunctions.forEach(([x0, x1, y0, y1]) => rr(x0, y0, x1 - x0, y1 - y0, T.path));
+    if (T.landmark) { const { x: lx, y: ly } = T.landmark; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(lx - 16, ly - 1, 32, 4); ctx.fillStyle = '#5a3a20'; ctx.fillRect(lx - 6, ly - 34, 12, 34); ctx.fillStyle = '#4a2c16'; ctx.fillRect(lx - 6, ly - 34, 3, 34); ctx.fillStyle = '#1a3a1a'; ctx.fillRect(lx - 26, ly - 60, 52, 32); ctx.fillRect(lx - 18, ly - 70, 36, 16); ctx.fillStyle = '#2a5a2a'; ctx.fillRect(lx - 20, ly - 54, 22, 14); ctx.fillRect(lx - 10, ly - 66, 16, 10); }
   } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
   if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
