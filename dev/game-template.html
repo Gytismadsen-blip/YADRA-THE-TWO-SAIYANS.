@@ -2752,7 +2752,7 @@ function mapPathPt(a, b, u) { // a point along the elbow road between two places
 function mapYou() { // your real position: in a town, or somewhere along the road between two towns
   if (area === 'village') return MAP_NODES.village; if (TOWNS[area] && TOWNS[area].kind === 'town') return MAP_NODES[area];
   if (area === 'forest') return mapPathPt('village', 'tavora', .25);
-  if (area === 'elmpath') return mapPathPt('village', 'elmvale', Math.max(0, Math.min(1, vx / TOWNS.elmpath.w)));
+  if (area === 'elmpath') return mapPathPt('tavora', 'elmvale', Math.max(0, Math.min(1, vx / TOWNS.elmpath.w))); // no drawn village-elmvale road, so ride the real tavora-elmvale one instead of floating in open space
   if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return mapPathPt(a, d[2], (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
   return MAP_NODES.village;
 }
