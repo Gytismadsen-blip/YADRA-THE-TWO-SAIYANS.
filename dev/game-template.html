@@ -2478,10 +2478,10 @@ Object.keys(ROUTE_DEF).filter(k => k !== 'r1').forEach(k => {
   T.forkTrees = []; // no dead ends - both paths really lead on
 }
 TOWNS.elmpath = { // OLD ELM TRAIL: a narrow, short link from the EAST ROAD junction to Elmvale, so Elmvale no longer requires a trip through Tavora first
-  name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[96, 112]], start: [30, 104],
+  name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[92, 116]], start: [30, 104], // exit zone = 84..124, exactly as tall as the corridors that meet the edges, so holding UP or DOWN into a corner still lets you walk out
   b: [], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'elmvale' }],
-  people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['FEW USE THIS TRAIL NOW.', 'ELMVALE IS JUST AHEAD.'])],
-  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }], noScatter: true, bendPath: true };
+  people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['THE OLD ELM IS TOO BIG TO CUT.', 'SO THE TRAIL GOES AROUND IT.', 'ELMVALE IS PAST THE SECOND TURN.'])],
+  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 236, y: 154, text: 'THE OLD ELM BLOCKS THE WAY. THE TRAIL GOES DOWN, EAST, THEN UP.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }], noScatter: true, bendPath: true };
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2493,18 +2493,22 @@ Object.keys(TOWNS).forEach(k => {
   if (!T.noScatter) for (let i = 0; i < n; i++) { const x = 10 + ((i * 97 + seed * 13) % (T.w - 20)), y = T.kind === 'route' ? 30 + ((i * 61 + seed * 7) % (T.h - 34)) : (i % 3 === 0 ? 236 : 236 + ((i * 53) % Math.max(30, T.h - 250))) + 0; if (T.kind === 'route' ? ((y > T.streets[0][0] - 14 && y < T.streets[0][1] + 14) || (T.forkX && y > T.zoneTop - 14 && y < T.zoneBottom + 14) || (T.branches || []).some(b => Math.abs(x - b.x) < 28 && y > 84)) : (blocked(x, y) || y > T.h - 6)) continue; T.trees.push({ x, y }); }
   if (T.forkTrees) T.trees.push(...T.forkTrees);
 });
-{ // OLD ELM TRAIL: a hand-built winding path (two turns and a clearing) instead of one straight strip
+{ // OLD ELM TRAIL: a real S-bend. The straight west-east corridor is cut off on purpose: the old elm blocks the way, so the trail drops south around it,
+  // runs east along the bottom, then climbs back up to the east exit. Holding only "right" from the west end stops at the elm.
   const T = TOWNS.elmpath;
-  T.pathSegs = [[0, 140, 104, 20], [170, 300, 124, 40], [330, 460, 104, 20]]; // [x0, x1, yCenter, halfWidth] - the clearing's band is a strict superset of the two straight segments' band (same top, wider bottom), so nowhere a player can stand in one segment ever falls outside the next - no seam can dead-end
-  T.pathJunctions = [[140, 170, 84, 164], [300, 330, 84, 164]]; // matches the clearing's own band exactly (the union of both neighbours)
-  T.landmark = { x: 235, y: 150 }; // in the clearing's extra lower half, off to the side of the direct through-route rather than blocking it
-  // Solid rectangles for the walls, not a line of point-trees: a player holding a diagonal into a
-  // point-wall could settle at a spot that's clear of the one tree ahead but still catches the next
-  // one over, and get stuck for good - real testing here hit that. Rectangles have no such gap.
-  T.wallRects = [];
-  T.pathSegs.forEach(([x0, x1, yc, hw]) => { T.wallRects.push([x0, 0, x1, yc - hw], [x0, yc + hw, x1, T.h]); });
-  T.pathJunctions.forEach(([x0, x1, y0, y1]) => { T.wallRects.push([x0, 0, x1, y0], [x0, y1, x1, T.h]); });
-  T.trees.push(T.landmark); // the old elm is a normal single obstacle - no wall-sliding risk since it's not part of a continuous line
+  // The walkable area as overlapping rectangles [x0, y0, x1, y1]. EVERYTHING else is solid (townSolid), so there are no
+  // single trees to slide off - real testing found that a diagonal hold against a line of point-trees can wedge the player for good.
+  // Each corner is an overlap of two 40-wide corridors, so the trail never narrows to a pocket.
+  T.walk = [
+    [0, 84, 148, 124],    // A: west entry, runs east and ends at the elm
+    [108, 84, 148, 174],  // D1: the drop, west of the elm
+    [108, 134, 352, 174], // B: bottom run, heading east
+    [312, 84, 352, 174],  // D2: the climb back up
+    [312, 84, 460, 124]   // C: east run to Elmvale
+  ];
+  T.landmark = { x: 160, y: 112 }; // the old elm: stands in the solid block right where the straight corridor would have carried on
+  T.trees.push(...[[20, 74], [58, 74], [96, 74], [196, 124], [226, 124], [256, 124], [286, 124], [336, 74], [372, 74], [410, 74], [446, 74]].map(([x, y]) => ({ x, y }))); // decoration only: feet sit 10px inside the wall, so no collision point ever reaches the walkable strip
+  T.pp[0].zone = [130, 140, 330, 170]; T.pp[0].x = T.pp[0].tx = 220; T.pp[0].y = T.pp[0].ty = 156; // keep the woodcutter on the bottom run
 }
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village', optionsReturn = null;
 function openOptionsFromGame() { optionsReturn = { area, x: vx, y: vy }; optIdx = 0; mode = 'options'; sfx('ok'); }
@@ -2526,7 +2530,7 @@ function townSolid(x, y) {
   if (T.water) { const w = T.water; if (x > 280 && x < 320 && y > w[1] && y < w[1] + 60 && T.dock) return false; if (y > w[1] + 6 && y < w[3]) return true; }
   if (T.bl.some(b => x > b.x0 - 4 && x < b.x1 + 4 && y > b.y0 + 14 && y < b.y1)) return true;
   if (T.deco === 'city' && x > T.w / 2 - 22 && x < T.w / 2 + 22 && y > 120 && y < 146) return true;
-  if (T.wallRects && T.wallRects.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3])) return true; // solid rectangles: no gaps, unlike a line of point-trees
+  if (T.walk && !T.walk.some(r => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) return true; // walkable rectangles only: everything outside is one solid wall, no gaps, unlike a line of point-trees
   return T.trees.some(t => Math.hypot(x - t.x, y - t.y) < 8);
 }
 function townInfo(tg) {
@@ -2570,6 +2574,7 @@ function duelStart(who) {
 }
 function toPlace(a, x, y, line) {
   stopSpeech(); trainOf(); mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; vAfterTalk = null; vFade = 1; vFlash = 0; vFace = 1;
+  if (TOWNS[a] && TOWNS[a].walk && townSolid(vx, vy)) { vx = TOWNS[a].start[0]; vy = TOWNS[a].start[1]; } // an old save from before the trail was reshaped may sit inside what is now wall
   P.set = makeHeroSet(hero); vMsg = line || ''; if (line) say(line);
 }
 function duelAfter(win) {
@@ -2841,10 +2846,9 @@ function drawTown() {
     if (T.forestBand) { const s = T.forestBand; for (let x = T.forkX + 16; x < T.w - 10; x += 24) vTree({ x, y: s[1] - 6 }); }
     if (T.southBranch) { const b = T.southBranch, s0 = T.streets[0]; rr(b.x0, s0[1], b.x1 - b.x0, T.h - s0[1], T.path); }
   } else if (T.bendPath) {
-    ctx.fillStyle = 'rgba(0,0,0,.1)';
-    T.pathSegs.forEach(([x0, x1, yc, hw]) => { rr(x0, yc - hw, x1 - x0, hw * 2, T.path); for (let x = x0 + 4; x < x1; x += 10) ctx.fillRect(x, yc - hw + 3 + (x % 3) * 5, 3, 2); });
-    T.pathJunctions.forEach(([x0, x1, y0, y1]) => rr(x0, y0, x1 - x0, y1 - y0, T.path));
-    if (T.landmark) { const { x: lx, y: ly } = T.landmark; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(lx - 16, ly - 1, 32, 4); ctx.fillStyle = '#5a3a20'; ctx.fillRect(lx - 6, ly - 34, 12, 34); ctx.fillStyle = '#4a2c16'; ctx.fillRect(lx - 6, ly - 34, 3, 34); ctx.fillStyle = '#1a3a1a'; ctx.fillRect(lx - 26, ly - 60, 52, 32); ctx.fillRect(lx - 18, ly - 70, 36, 16); ctx.fillStyle = '#2a5a2a'; ctx.fillRect(lx - 20, ly - 54, 22, 14); ctx.fillRect(lx - 10, ly - 66, 16, 10); }
+    ctx.fillStyle = 'rgba(0,24,0,.42)'; ctx.fillRect(0, 34, T.w, T.h - 34); // dense undergrowth = the solid wall
+    T.walk.forEach(([x0, y0, x1, y1]) => rr(x0, y0, x1 - x0, y1 - y0, T.path));
+    ctx.fillStyle = 'rgba(0,0,0,.1)'; T.walk.forEach(([x0, y0, x1, y1]) => { for (let x = x0 + 4; x < x1; x += 10) ctx.fillRect(x, y0 + 3 + (x % 3) * 5, 3, 2); });
   } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
   if (T.deco === 'farm') { for (let r = 0; r < 5; r++) { rr(330, 236 + r * 12, 190, 7, '#6a4a2a'); ctx.fillStyle = '#5aa03a'; for (let j = 0; j < 22; j++) ctx.fillRect(334 + j * 8, 234 + r * 12, 3, 5); } ctx.fillStyle = '#d8b050'; for (let j = 0; j < 4; j++) { ctx.fillRect(60 + j * 30, 250, 16, 10); ctx.fillStyle = '#b89038'; ctx.fillRect(60 + j * 30, 256, 16, 3); ctx.fillStyle = '#d8b050'; } }
@@ -2869,6 +2873,7 @@ function drawTown() {
   T.bl.forEach(b => vBuilding(b, b.roof, b.wall, b.label));
   const items = T.trees.filter(t => t.x > camX - 20 && t.x < camX + CW + 20).map(t => ({ y: t.y, draw: () => { vTree(t); if (T.trees && T.deco === 'temple') { ctx.fillStyle = 'rgba(160,140,255,.25)'; ctx.fillRect(t.x - 10, t.y - 30, 20, 20); } } }));
   (T.signs || []).forEach(s => items.push({ y: s.y, draw: () => vSign(s) }));
+  if (T.landmark) items.push({ y: T.landmark.y, draw: () => { const { x: lx, y: ly } = T.landmark; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(lx - 16, ly - 1, 32, 4); ctx.fillStyle = '#5a3a20'; ctx.fillRect(lx - 6, ly - 34, 12, 34); ctx.fillStyle = '#4a2c16'; ctx.fillRect(lx - 6, ly - 34, 3, 34); ctx.fillStyle = '#2a6a2a'; ctx.fillRect(lx - 30, ly - 62, 60, 34); ctx.fillRect(lx - 22, ly - 74, 44, 16); ctx.fillStyle = '#3c8a3c'; ctx.fillRect(lx - 24, ly - 56, 26, 14); ctx.fillRect(lx - 12, ly - 70, 18, 10); ctx.fillStyle = '#1e5220'; ctx.fillRect(lx - 30, ly - 38, 60, 10); ctx.fillRect(lx + 8, ly - 56, 20, 14); ctx.fillStyle = '#6a4a28'; ctx.fillRect(lx - 3, ly - 34, 4, 34); } }); // the old elm, y-sorted so the hero walks in front of or behind it
   drawPeopleAndPlayer(items);
   if (T.kind === 'route') { ctx.fillStyle = 'rgba(10,30,20,.10)'; ctx.fillRect(camX, camY, CW, 196); }
   if (T.deco === 'temple') { ctx.fillStyle = 'rgba(90,60,150,.12)'; ctx.fillRect(camX, camY, CW, 196); }
@@ -3268,6 +3273,7 @@ window.__yadra = { get state() { return state; }, get mode() { return mode; }, p
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
   get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
+  solid(x, y) { return vSolid(x, y); }, mapYou() { return mapYou(); }, mapCurrent() { return mapCurrent(); }, elmpathInfo() { const T = TOWNS.elmpath; return { walk: T.walk.map(r => r.slice()), start: T.start.slice(), w: T.w, h: T.h, landmark: Object.assign({}, T.landmark) }; },
   routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },
   missions() { return missionList().map(m => ({ id: m.id, kind: m.kind, title: m.title, st: m.st })); },
   setQuestStep(n) { questOf().step = n; trSave(); }, setQ2Step(n) { q2Of().step = n; trSave(); }, cookTalk() { cookTalk(); }, pickYes() { if (vChoice && vChoice.yes) { const c = vChoice; vChoice = null; c.yes(); } },
