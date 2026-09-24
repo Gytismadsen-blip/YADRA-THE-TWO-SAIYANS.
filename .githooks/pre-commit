@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stops the commit if index.html is out of sync with dev/game-template.html.
+# Enable after cloning: git config core.hooksPath .githooks
+node dev/check-build.js
