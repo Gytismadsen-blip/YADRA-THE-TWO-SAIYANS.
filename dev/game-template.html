@@ -1985,7 +1985,7 @@ function drawVillage() {
     textS(key + ': ' + info[0], 8, 203, '#ffe060', 2); textS(info[1], 8, 224, '#a8a8c8', 1);
   } else {
     wrap(vMsg || buffLine(), 31).slice(0, 2).forEach((l, i) => textS(l, 8, 204 + i * 10, '#c8f0ff', 1));
-    textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
+    textS(questLine() || (area === 'village' ? 'WALK AROUND. GO INTO HOUSES.' : area === 'forest' ? 'WEST: BACK TO THE VILLAGE.' : area === 'elmpath' ? 'WEST: EAST ROAD. EAST: ELMVALE.' : 'WALK DOWN TO LEAVE.'), 8, 226, questLine() ? '#ffe060' : '#8888b0', 1);
   }
   if (touchMode && !vFish && !vTalk && (vMenu || vChoice || ROOMS[area])) { const lb = (vMenu || vChoice) ? '< BACK' : '< LEAVE', bw = textW(lb) + 10, bx = CW - bw - 3; ctx.fillStyle = 'rgba(10,10,40,.92)'; ctx.fillRect(bx, 16, bw, 15); ctx.fillStyle = '#e8e0c8'; ctx.fillRect(bx, 16, bw, 1); ctx.fillRect(bx, 30, bw, 1); ctx.fillRect(bx, 16, 1, 15); ctx.fillRect(bx + bw - 1, 16, 1, 15); textS(lb, bx + 5, 20, '#ffe060', 1); }
   if (vFish) drawFishUi();
@@ -2481,7 +2481,7 @@ TOWNS.elmpath = { // OLD ELM TRAIL: a narrow, short link from the EAST ROAD junc
   name: 'OLD ELM TRAIL', kind: 'route', w: 460, h: 200, ground: '#274d27', path: '#7a6644', sky: ['#233623', '#547254'], deco: 'route', trees: '#1f4a1f', minY: 60, streets: [[92, 116]], start: [30, 104], // exit zone = 84..124, exactly as tall as the corridors that meet the edges, so holding UP or DOWN into a corner still lets you walk out
   b: [], exits: [{ side: 'w', row: 0, to: 'r1' }, { side: 'e', row: 0, to: 'elmvale' }],
   people: [PL('WOODCUTTER', '#a06030', '#301810', 'r0', ['THE OLD ELM IS TOO BIG TO CUT.', 'SO THE TRAIL GOES AROUND IT.', 'ELMVALE IS PAST THE SECOND TURN.'])],
-  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 236, y: 154, text: 'THE OLD ELM BLOCKS THE WAY. THE TRAIL GOES DOWN, EAST, THEN UP.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }], noScatter: true, bendPath: true };
+  signs: [{ x: 22, y: 104, text: 'WEST: BACK TO EAST ROAD.' }, { x: 128, y: 100, text: 'THE OLD ELM BLOCKS THE FORGOTTEN ROAD. ELMVALE LIES BEYOND IT.' }, { x: 438, y: 104, text: 'EAST: ELMVALE.' }], noScatter: true, bendPath: true };
 // build layout: buildings, streets, walking zones, trees
 Object.keys(TOWNS).forEach(k => {
   const T = TOWNS[k]; T.key = k; T.streets = T.streets || STREETS; T.minY = T.minY || 92;
@@ -2508,7 +2508,7 @@ Object.keys(TOWNS).forEach(k => {
   ];
   T.landmark = { x: 160, y: 112 }; // the old elm: stands in the solid block right where the straight corridor would have carried on
   T.trees.push(...[[20, 74], [58, 74], [96, 74], [196, 124], [226, 124], [256, 124], [286, 124], [336, 74], [372, 74], [410, 74], [446, 74]].map(([x, y]) => ({ x, y }))); // decoration only: feet sit 10px inside the wall, so no collision point ever reaches the walkable strip
-  T.pp[0].zone = [130, 140, 330, 170]; T.pp[0].x = T.pp[0].tx = 220; T.pp[0].y = T.pp[0].ty = 156; // keep the woodcutter on the bottom run
+  T.pp[0].zone = [250, 140, 330, 170]; T.pp[0].x = T.pp[0].tx = 285; T.pp[0].y = T.pp[0].ty = 156; // keep the woodcutter on the bottom run
 }
 let area2 = null, hutReturn = null, hutTitle = 'HOUSE', trainHall = false, foeReturn = null, mapSel = 'village', optionsReturn = null;
 function openOptionsFromGame() { optionsReturn = { area, x: vx, y: vy }; optIdx = 0; mode = 'options'; sfx('ok'); }
@@ -2575,6 +2575,7 @@ function duelStart(who) {
 function toPlace(a, x, y, line) {
   stopSpeech(); trainOf(); mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; vAfterTalk = null; vFade = 1; vFlash = 0; vFace = 1;
   if (TOWNS[a] && TOWNS[a].walk && townSolid(vx, vy)) { vx = TOWNS[a].start[0]; vy = TOWNS[a].start[1]; } // an old save from before the trail was reshaped may sit inside what is now wall
+  if (a === 'elmpath' && saveData && !saveData.foundElmTrail) { saveData.foundElmTrail = 1; trSave(); } // a save that already stands on the trail (Continue, fight return) counts as discovered too
   P.set = makeHeroSet(hero); vMsg = line || ''; if (line) say(line);
 }
 function duelAfter(win) {
@@ -2698,6 +2699,7 @@ function enterArea(to, from, fromExit) {
     if (ex && ex.side === 's') { vx = Math.round((ex.xRange[0] + ex.xRange[1]) / 2); vy = T.h - 40; } // arriving back onto a north-south branch, clear of its own trigger zone (which starts at T.h - 30)
     else { const st = T.streets[ex ? ex.row : 0], my = Math.round((st[0] + st[1]) / 2); vx = ex && ex.side === 'e' ? T.w - 30 : 30; vy = my; }
     if (T.kind === 'town') markVisited(to);
+    if (to === 'elmpath') { trainOf(); saveData.foundElmTrail = 1; trSave(); } // discovering the trail is remembered for good, even if you turn back before Elmvale
   }
   vFade = 1; vWalk = 0; vMsg = 'YOU ARRIVE: ' + areaLabel(to) + '.'; sfx('ok'); vTalk = '';
 }
@@ -2763,15 +2765,17 @@ function buildWorldMap() {
   return cv2;
 }
 function mapCurrent() { return area === 'village' || area === 'forest' ? 'village' : TOWNS[area] && TOWNS[area].kind === 'town' ? area : area === 'elmpath' ? 'elmvale' : (ROUTE_DEF[area] ? (ROUTE_DEF[area][1] === 'forest' ? 'village' : ROUTE_DEF[area][1]) : 'village'); }
-function mapPathPt(a, b, u) { // a point along the elbow road between two places
-  const A = MAP_NODES[a], B = MAP_NODES[b], hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y), M = hor ? { x: B.x, y: A.y } : { x: A.x, y: B.y };
+const MAP_ELM_JUNCTION = { x: 250, y: 290 }; // where OLD ELM TRAIL leaves EAST ROAD: on the village-tavora road
+function mapPathPt(a, b, u) { return mapPathXY(MAP_NODES[a], MAP_NODES[b], u); }
+function mapPathXY(A, B, u) { // a point along the elbow road between two points
+  const hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y), M = hor ? { x: B.x, y: A.y } : { x: A.x, y: B.y };
   const l1 = Math.hypot(M.x - A.x, M.y - A.y), l2 = Math.hypot(B.x - M.x, B.y - M.y), d = Math.max(0, Math.min(1, u)) * (l1 + l2);
   return d <= l1 ? { x: A.x + (M.x - A.x) * (l1 ? d / l1 : 0), y: A.y + (M.y - A.y) * (l1 ? d / l1 : 0) } : { x: M.x + (B.x - M.x) * ((d - l1) / (l2 || 1)), y: M.y + (B.y - M.y) * ((d - l1) / (l2 || 1)) };
 }
 function mapYou() { // your real position: in a town, or somewhere along the road between two towns
   if (area === 'village') return MAP_NODES.village; if (TOWNS[area] && TOWNS[area].kind === 'town') return MAP_NODES[area];
   if (area === 'forest') return mapPathPt('village', 'tavora', .25);
-  if (area === 'elmpath') return mapPathPt('tavora', 'elmvale', Math.max(0, Math.min(1, vx / TOWNS.elmpath.w))); // no drawn village-elmvale road, so ride the real tavora-elmvale one instead of floating in open space
+  if (area === 'elmpath') return mapPathXY(MAP_ELM_JUNCTION, MAP_NODES.elmvale, Math.max(0, Math.min(1, vx / TOWNS.elmpath.w))); // rides the trail's own road: junction on EAST ROAD -> Elmvale
   if (ROUTE_DEF[area]) { const d = ROUTE_DEF[area], a = d[1] === 'forest' ? 'village' : d[1], u = Math.max(0, Math.min(1, vx / TOWNS[area].w)); return mapPathPt(a, d[2], (d[1] === 'forest' ? .25 : 0) + u * (d[1] === 'forest' ? .75 : 1)); }
   return MAP_NODES.village;
 }
@@ -2815,8 +2819,13 @@ function drawMap() {
   const road = (a, b, col, dash) => { const A = P(a), B = P(b), hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(A.x, A.y); if (hor) ctx.lineTo(B.x, A.y); else ctx.lineTo(A.x, B.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]); };
   MAP_EDGES.forEach(e => { if (vis[e[0]] || vis[e[1]]) road(e[0], e[1], '#f0a848'); });
   mapShortcuts().forEach(sc => road(sc.a, sc.b, '#80f0ff', [4, 3]));
+  if (vis.elmvale || (saveData && saveData.foundElmTrail) || area === 'elmpath') { // OLD ELM TRAIL: its own road from a junction on EAST ROAD to Elmvale
+    const A = { x: xf.ox + MAP_ELM_JUNCTION.x * s, y: xf.oy + MAP_ELM_JUNCTION.y * s }, B = P('elmvale'), hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y);
+    ctx.strokeStyle = '#f0a848'; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(A.x, A.y); if (hor) ctx.lineTo(B.x, A.y); else ctx.lineTo(A.x, B.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+    ctx.fillStyle = '#301010'; ctx.fillRect(Math.round(A.x - 3), Math.round(A.y - 3), 6, 6); ctx.fillStyle = '#f0a848'; ctx.fillRect(Math.round(A.x - 2), Math.round(A.y - 2), 4, 4);
+  }
   Object.keys(MAP_NODES).forEach(k => {
-    const seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]])); if (!seen && !near) return;
+    const seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]])) || (k === 'elmvale' && (area === 'elmpath' || (saveData && saveData.foundElmTrail))); if (!seen && !near) return;
     const q = P(k), sz = mapZoomOut ? 5 : 9, sel = k === mapSel;
     ctx.fillStyle = '#301010'; ctx.fillRect(Math.round(q.x - sz / 2 - 1), Math.round(q.y - sz / 2 - 1), sz + 2, sz + 2); ctx.fillStyle = seen ? '#e83a3a' : '#888898'; ctx.fillRect(Math.round(q.x - sz / 2), Math.round(q.y - sz / 2), sz, sz);
     if (sel && Math.floor(time * 3) % 2 === 0) { ctx.strokeStyle = '#ffe060'; ctx.lineWidth = 2; ctx.strokeRect(Math.round(q.x - sz / 2 - 3), Math.round(q.y - sz / 2 - 3), sz + 6, sz + 6); }
@@ -2848,6 +2857,18 @@ function drawTown() {
   } else if (T.bendPath) {
     ctx.fillStyle = 'rgba(0,24,0,.42)'; ctx.fillRect(0, 34, T.w, T.h - 34); // dense undergrowth = the solid wall
     T.walk.forEach(([x0, y0, x1, y1]) => rr(x0, y0, x1 - x0, y1 - y0, T.path));
+    { // purely visual: ragged verges so it reads as a worn track, not five boxes. Collision (T.walk) is untouched.
+      const hs = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); }, inW = (x, y) => T.walk.some(r => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1);
+      T.walk.forEach(([x0, y0, x1, y1]) => {
+        const edge = (x, y, dx, dy) => { const a = hs(x, y);
+          if (a > .55 && !inW(x + dx * 3, y + dy * 3)) rr(x, y, dx ? 2 : 4, dy ? 2 : 4, '#4a3a22'); // darker packed earth on the verge: clearly NOT the walkable path colour, so it never looks like a path you can't walk
+          if (a < .18 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#6a6a62'; ctx.fillRect(x + dx * 3, y + dy * 3, 3, 2); ctx.fillStyle = '#8a8a80'; ctx.fillRect(x + dx * 3, y + dy * 3, 3, 1); } // stone
+          else if (a > .18 && a < .3 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#4a2e18'; ctx.fillRect(x + dx * 2, y + dy * 2, dx ? 5 : 1, dy ? 5 : 1); } // root
+          else if (a > .3 && a < .42 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#3f7a2a'; ctx.fillRect(x + dx * 3, y + dy * 3, 1, 3); ctx.fillRect(x + dx * 3 + 2, y + dy * 3 + 1, 1, 2); } }; // grass tuft
+        for (let x = x0; x < x1; x += 6) { edge(x, y0 - 2, 0, -1); edge(x, y1, 0, 1); }
+        for (let y = y0; y < y1; y += 6) { edge(x0 - 2, y, -1, 0); edge(x1, y, 1, 0); }
+      });
+    }
     ctx.fillStyle = 'rgba(0,0,0,.1)'; T.walk.forEach(([x0, y0, x1, y1]) => { for (let x = x0 + 4; x < x1; x += 10) ctx.fillRect(x, y0 + 3 + (x % 3) * 5, 3, 2); });
   } else T.streets.forEach(s => { rr(0, s[0], T.w, s[1] - s[0], T.path); ctx.fillStyle = 'rgba(0,0,0,.1)'; for (let x = 4; x < T.w; x += 10) ctx.fillRect(x, s[0] + 3 + (x % 3) * 5, 3, 2); });
   T.bl.forEach(b => { const s = b.y0 < 100 ? T.streets[0] : T.streets[1]; rr(b.dx - 6, b.y1, 12, s[0] + 2 - b.y1, T.path); });
@@ -3271,7 +3292,7 @@ if (params.get('skipintro')) newGame({}); else toTitle();
 window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; },
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
-  get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
+  get area() { return area; }, toPlace, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
   solid(x, y) { return vSolid(x, y); }, mapYou() { return mapYou(); }, mapCurrent() { return mapCurrent(); }, elmpathInfo() { const T = TOWNS.elmpath; return { walk: T.walk.map(r => r.slice()), start: T.start.slice(), w: T.w, h: T.h, landmark: Object.assign({}, T.landmark) }; },
   routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },

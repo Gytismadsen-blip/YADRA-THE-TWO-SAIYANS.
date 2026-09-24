@@ -2840,6 +2840,7 @@ function duelStart(who) {
 function toPlace(a, x, y, line) {
   stopSpeech(); trainOf(); mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; vAfterTalk = null; vFade = 1; vFlash = 0; vFace = 1;
   if (TOWNS[a] && TOWNS[a].walk && townSolid(vx, vy)) { vx = TOWNS[a].start[0]; vy = TOWNS[a].start[1]; } // an old save from before the trail was reshaped may sit inside what is now wall
+  if (a === 'elmpath' && saveData && !saveData.foundElmTrail) { saveData.foundElmTrail = 1; trSave(); } // a save that already stands on the trail (Continue, fight return) counts as discovered too
   P.set = makeHeroSet(hero); vMsg = line || ''; if (line) say(line);
 }
 function duelAfter(win) {
@@ -3556,7 +3557,7 @@ if (params.get('skipintro')) newGame({}); else toTitle();
 window.__yadra = { get state() { return state; }, get mode() { return mode; }, press, doTurn, tgt, disp, get script() { return script; },
   get fish() { return vFish && { phase: vFish.phase, x: vFish.x, lo: vFish.lo, hi: vFish.hi, kind: vFish.kind }; },
   get msg() { return msg; }, infoFor(mv) { return foeInfo(mv); }, fightFoe(id) { newGame({ foe: id, line: id === 'roku' ? null : 'GET LOST, KID, OR ELSE!' }); },
-  get area() { return area; }, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
+  get area() { return area; }, toPlace, goto(a, x, y) { mode = 'village'; area = a; vx = x; vy = y; vTalk = ''; vMenu = null; },
   get pos() { return { x: vx, y: vy, area, fade: vFade }; }, tp(x, y, a) { if (a) area = a; vx = x; vy = y; }, people() { return curPeople().map(p => ({ n: p.name, x: p.x, y: p.y })); }, get foe() { return foe.id; }, get choice() { return vChoice && { idx: vChoice.idx, opts: vChoice.opts.slice() }; }, get talk() { return vTalk; }, get mapSel() { return mapSel; }, selMap(k) { mapSel = k; }, get saveData() { return saveData; }, get msg2() { return vMsg; },
   solid(x, y) { return vSolid(x, y); }, mapYou() { return mapYou(); }, mapCurrent() { return mapCurrent(); }, elmpathInfo() { const T = TOWNS.elmpath; return { walk: T.walk.map(r => r.slice()), start: T.start.slice(), w: T.w, h: T.h, landmark: Object.assign({}, T.landmark) }; },
   routeInfo(k) { const T = TOWNS[k]; return T && { forkX: T.forkX, laneCount: T.laneCount, correctLane: T.correctLane, laneBands: T.laneBands, exits: T.exits.map(e => ({ side: e.side, row: e.row, to: e.to })) }; },

@@ -28,4 +28,13 @@ window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft' }));
 check('turned back to EAST ROAD without visiting Elmvale', Y.area === 'r1' && !(Y.saveData.visited || {}).elmvale, 'area=' + Y.area);
 const after = mapCounts();
 check('map still draws the trail road + junction after turning back', after.moveTo > before.moveTo && after.fillRect > before.fillRect, 'moveTo ' + before.moveTo + ' -> ' + after.moveTo + ', fillRect ' + before.fillRect + ' -> ' + after.fillRect);
+// old save that already stands on the trail: loaded through toPlace (Continue), never through enterArea
+delete Y.saveData.foundElmTrail; Y.goto('village', 160, 384); pump(2);
+check('old save: flag is missing before loading onto the trail', !Y.saveData.foundElmTrail);
+Y.toPlace('elmpath', 30, 104, ''); pump(2);
+check('loading onto OLD ELM TRAIL via toPlace sets foundElmTrail', Y.area === 'elmpath' && Y.saveData.foundElmTrail === 1, 'area=' + Y.area);
+check('...and it is written to the save slot', JSON.stringify(JSON.parse(window.localStorage.getItem(window.localStorage.key(0)) || 'null')).indexOf('foundElmTrail') >= 0 || Object.keys(window.localStorage).some(k => (window.localStorage.getItem(k) || '').indexOf('foundElmTrail') >= 0));
+Y.toPlace('r1', 200, 120, ''); pump(2);
+const again = mapCounts();
+check('old save: turning back to EAST ROAD keeps the trail road on the map', again.moveTo > before.moveTo && again.fillRect > before.fillRect, 'moveTo ' + before.moveTo + ' -> ' + again.moveTo);
 console.log(fails ? '\nDISCOVER TEST FAILED (' + fails + ')' : '\nDISCOVER TEST OK'); process.exit(fails ? 1 : 0);
