@@ -2963,6 +2963,7 @@ function enterArea(to, from, fromExit) {
     if (ex && ex.side === 's') { vx = Math.round((ex.xRange[0] + ex.xRange[1]) / 2); vy = T.h - 40; } // arriving back onto a north-south branch, clear of its own trigger zone (which starts at T.h - 30)
     else { const st = T.streets[ex ? ex.row : 0], my = Math.round((st[0] + st[1]) / 2); vx = ex && ex.side === 'e' ? T.w - 30 : 30; vy = my; }
     if (T.kind === 'town') markVisited(to);
+    if (to === 'elmpath') { trainOf(); saveData.foundElmTrail = 1; trSave(); } // discovering the trail is remembered for good, even if you turn back before Elmvale
   }
   vFade = 1; vWalk = 0; vMsg = 'YOU ARRIVE: ' + areaLabel(to) + '.'; sfx('ok'); vTalk = '';
 }
@@ -3082,13 +3083,13 @@ function drawMap() {
   const road = (a, b, col, dash) => { const A = P(a), B = P(b), hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(A.x, A.y); if (hor) ctx.lineTo(B.x, A.y); else ctx.lineTo(A.x, B.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]); };
   MAP_EDGES.forEach(e => { if (vis[e[0]] || vis[e[1]]) road(e[0], e[1], '#f0a848'); });
   mapShortcuts().forEach(sc => road(sc.a, sc.b, '#80f0ff', [4, 3]));
-  if (vis.elmvale || area === 'elmpath') { // OLD ELM TRAIL: its own road from a junction on EAST ROAD to Elmvale
+  if (vis.elmvale || (saveData && saveData.foundElmTrail) || area === 'elmpath') { // OLD ELM TRAIL: its own road from a junction on EAST ROAD to Elmvale
     const A = { x: xf.ox + MAP_ELM_JUNCTION.x * s, y: xf.oy + MAP_ELM_JUNCTION.y * s }, B = P('elmvale'), hor = Math.abs(B.x - A.x) >= Math.abs(B.y - A.y);
     ctx.strokeStyle = '#f0a848'; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(A.x, A.y); if (hor) ctx.lineTo(B.x, A.y); else ctx.lineTo(A.x, B.y); ctx.lineTo(B.x, B.y); ctx.stroke();
     ctx.fillStyle = '#301010'; ctx.fillRect(Math.round(A.x - 3), Math.round(A.y - 3), 6, 6); ctx.fillStyle = '#f0a848'; ctx.fillRect(Math.round(A.x - 2), Math.round(A.y - 2), 4, 4);
   }
   Object.keys(MAP_NODES).forEach(k => {
-    const seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]])) || (k === 'elmvale' && area === 'elmpath'); if (!seen && !near) return;
+    const seen = vis[k], near = MAP_EDGES.some(e => (e[0] === k && vis[e[1]]) || (e[1] === k && vis[e[0]])) || (k === 'elmvale' && (area === 'elmpath' || (saveData && saveData.foundElmTrail))); if (!seen && !near) return;
     const q = P(k), sz = mapZoomOut ? 5 : 9, sel = k === mapSel;
     ctx.fillStyle = '#301010'; ctx.fillRect(Math.round(q.x - sz / 2 - 1), Math.round(q.y - sz / 2 - 1), sz + 2, sz + 2); ctx.fillStyle = seen ? '#e83a3a' : '#888898'; ctx.fillRect(Math.round(q.x - sz / 2), Math.round(q.y - sz / 2), sz, sz);
     if (sel && Math.floor(time * 3) % 2 === 0) { ctx.strokeStyle = '#ffe060'; ctx.lineWidth = 2; ctx.strokeRect(Math.round(q.x - sz / 2 - 3), Math.round(q.y - sz / 2 - 3), sz + 6, sz + 6); }
@@ -3124,7 +3125,7 @@ function drawTown() {
       const hs = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); }, inW = (x, y) => T.walk.some(r => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1);
       T.walk.forEach(([x0, y0, x1, y1]) => {
         const edge = (x, y, dx, dy) => { const a = hs(x, y);
-          if (a > .55 && !inW(x + dx * 3, y + dy * 3)) rr(x, y, dx ? 2 : 4, dy ? 2 : 4, T.path); // path spills a little over the verge
+          if (a > .55 && !inW(x + dx * 3, y + dy * 3)) rr(x, y, dx ? 2 : 4, dy ? 2 : 4, '#4a3a22'); // darker packed earth on the verge: clearly NOT the walkable path colour, so it never looks like a path you can't walk
           if (a < .18 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#6a6a62'; ctx.fillRect(x + dx * 3, y + dy * 3, 3, 2); ctx.fillStyle = '#8a8a80'; ctx.fillRect(x + dx * 3, y + dy * 3, 3, 1); } // stone
           else if (a > .18 && a < .3 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#4a2e18'; ctx.fillRect(x + dx * 2, y + dy * 2, dx ? 5 : 1, dy ? 5 : 1); } // root
           else if (a > .3 && a < .42 && !inW(x + dx * 4, y + dy * 4)) { ctx.fillStyle = '#3f7a2a'; ctx.fillRect(x + dx * 3, y + dy * 3, 1, 3); ctx.fillRect(x + dx * 3 + 2, y + dy * 3 + 1, 1, 2); } }; // grass tuft
